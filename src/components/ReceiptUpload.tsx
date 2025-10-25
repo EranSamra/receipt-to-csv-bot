@@ -22,7 +22,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
       );
       
       if (files.length > 0) {
-        onFilesSelected([...selectedFiles, ...files].slice(0, 10));
+        onFilesSelected([...selectedFiles, ...files].slice(0, 30));
       }
     },
     [onFilesSelected, selectedFiles]
@@ -43,9 +43,9 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
       file.type.startsWith('image/')
     );
     
-    if (files.length > 0) {
-      onFilesSelected([...selectedFiles, ...files].slice(0, 10));
-    }
+      if (files.length > 0) {
+        onFilesSelected([...selectedFiles, ...files].slice(0, 30));
+      }
   };
 
   return (
@@ -64,7 +64,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
           <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">Upload Receipt Images</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Drag and drop up to 10 receipt images, or click to browse
+            Drag and drop up to 30 receipt images, or click to browse
           </p>
           <label htmlFor="file-upload">
             <Button type="button" variant="default" asChild>
@@ -89,7 +89,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
 
       {selectedFiles.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium">Selected Files ({selectedFiles.length}/10)</h4>
+          <h4 className="text-sm font-medium">Selected Files ({selectedFiles.length}/30)</h4>
           <div className="space-y-2">
             {selectedFiles.map((file, index) => (
               <Card key={index} className="p-3">

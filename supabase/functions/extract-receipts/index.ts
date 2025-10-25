@@ -5,50 +5,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const EXTRACTION_PROMPT = `You are a precise information extraction engine that converts receipt images into clean, validated CSV rows for expense reports. Your job is to return only a CSV payload that follows the exact schema and rules below. If information is missing or uncertain, leave the field empty, never guess, and never invent merchants, totals, or dates.
+const currentYear = new Date().getFullYear();
 
-CSV schema:
-Header columns, in this exact order:
-source_filename,merchant_name,merchant_tax_id,merchant_address,merchant_city,merchant_country,receipt_datetime_local,currency,subtotal_amount,tax_amount,tip_amount,total_amount,payment_method,last4_card,invoice_or_receipt_number,line_items_json,category_hint,notes
+const EXTRACTION_PROMPT = `Extract data from each receipt with the following field names:
+
+CSV Header (exact order):
+source_filename,is_receipt,total_amount,vat_amount,currency_ISO_4217,merchant_name_localized,date_ISO_8601,is_month_explicit,receipt_id,merchant_address,document_language_ISO_639,all_totals,all_dates,spend_category
 
 Field rules:
-- source_filename: original file name if available, else a stable placeholder like image_001.jpg
-- merchant_name: exact store or vendor name as printed
-- merchant_tax_id: VAT, ABN, EIN, CIF, SIREN, etc. Normalize to raw string without spaces where feasible
-- merchant_address: street + number
-- merchant_city: city or locality only
-- merchant_country: ISO 3166-1 alpha-2 code if visible, else empty
-- receipt_datetime_local: ISO 8601 format YYYY-MM-DDThh:mm, 24h, local time if visible; if only a date appears, use YYYY-MM-DD and omit time
-- currency: 3-letter ISO code inferred from symbol or text. Examples: USD, EUR, GBP, ILS. If unknown, leave empty
-- subtotal_amount, tax_amount, tip_amount, total_amount: use dot as decimal separator. Only numbers. If only total is present, set subtotal empty and tax empty
-- payment_method: one of [card, cash, mobile, bank_transfer, unknown]
-- last4_card: last 4 digits if shown, else empty
-- invoice_or_receipt_number: any document number printed
-- line_items_json: JSON array string of objects [{"description":"","qty":0,"unit_price":0,"line_total":0}] with numeric fields as numbers. If no items visible, return "[]"
-- category_hint: one word or short phrase if clearly inferable from merchant or items, such as travel, meals, lodging, fuel, rideshare, parking, supplies. Else empty
-- notes: optional short note for anomalies or critical uncertainties. Max 120 chars
-
-Normalization rules:
-- Convert dates to ISO with correct locale if obvious from context
-- Currency symbols map to ISO codes
-- Remove thousands separators, keep decimal point
-- Trim whitespace
-
-Validation rules:
-- If total_amount and subtotal_amount + tax_amount + tip_amount mismatch beyond 1%, keep total_amount as printed and add notes warning
-- If the receipt is not a financial document, return an empty CSV row with only source_filename filled and put "Non-receipt" in notes
-
-Multi-language:
-- Preserve merchant and address text in the original script
-- Dates and numbers must be normalized as per rules above
-
-Line item guidance:
-- If quantities missing, set qty to 1
-- If unit_price missing but line_total present, set unit_price equal to line_total
-- Exclude tips and taxes from line_items_json unless they appear as explicit line items
+- source_filename: original file name if available
+- is_receipt: boolean (true/false) - true if the image is a receipt or invoice, false otherwise
+- total_amount: numeric value with dot as decimal separator
+- vat_amount: numeric value with dot as decimal separator, empty if not shown
+- currency_ISO_4217: ISO 4217 currency code (USD, EUR, GBP, ILS, etc.). If multiple currencies appear, use the one next to total_amount
+- merchant_name_localized: merchant name in original script/language
+- date_ISO_8601: ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDThh:mm). If date has no year, assume ${currentYear}. Leave empty if no date
+- is_month_explicit: boolean (true/false) - true if date includes textual month (e.g., "March", "Mar"), false if fully numeric (e.g., "03/05/2025")
+- receipt_id: any receipt/invoice number shown
+- merchant_address: full address as shown
+- document_language_ISO_639: ISO 639 language code (en, he, fr, es, etc.)
+- all_totals: JSON array of all total amounts found as strings, e.g., ["15.50","17.25"]
+- all_dates: JSON array of all ISO 8601 dates found, e.g., ["2025-03-15","2025-03-16"]. If date has no year, assume ${currentYear}
+- spend_category: one of [meals, transportation, lodging, fuel, supplies, entertainment, utilities, other]
 
 Return format:
-Output only the CSV text. No explanations. No code fences. No markdown. Just the raw CSV with header and data row(s).`;
+Output only the CSV text with header and one row per image. No markdown, no code fences, no explanations.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -77,10 +58,20 @@ serve(async (req) => {
       );
     }
 
-    // Process all images in parallel
+    // Process all images in parallel - use chunk-based base64 encoding to avoid stack overflow
     const imagePromises = files.map(async (file) => {
       const bytes = await file.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+      const uint8Array = new Uint8Array(bytes);
+      
+      // Convert to base64 in chunks to avoid stack overflow
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+      const base64 = btoa(binary);
+      
       return {
         name: file.name,
         base64: `data:${file.type};base64,${base64}`

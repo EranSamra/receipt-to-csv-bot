@@ -12,23 +12,20 @@ import {
 
 export interface ReceiptData {
   source_filename: string;
-  merchant_name: string;
-  merchant_tax_id: string;
-  merchant_address: string;
-  merchant_city: string;
-  merchant_country: string;
-  receipt_datetime_local: string;
-  currency: string;
-  subtotal_amount: string;
-  tax_amount: string;
-  tip_amount: string;
+  is_receipt: string;
   total_amount: string;
-  payment_method: string;
-  last4_card: string;
-  invoice_or_receipt_number: string;
-  line_items_json: string;
-  category_hint: string;
-  notes: string;
+  vat_amount: string;
+  currency_ISO_4217: string;
+  merchant_name_localized: string;
+  date_ISO_8601: string;
+  is_month_explicit: string;
+  receipt_id: string;
+  merchant_address: string;
+  document_language_ISO_639: string;
+  all_totals: string;
+  all_dates: string;
+  spend_category: string;
+  [key: string]: string;
 }
 
 interface ResultsTableProps {
@@ -59,32 +56,33 @@ export const ResultsTable = ({ results, onDownloadCSV }: ResultsTableProps) => {
           <TableHeader>
             <TableRow>
               <TableHead>File</TableHead>
+              <TableHead>Is Receipt</TableHead>
               <TableHead>Merchant</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Currency</TableHead>
               <TableHead className="text-right">Total</TableHead>
-              <TableHead>Payment</TableHead>
+              <TableHead className="text-right">VAT</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead>Notes</TableHead>
+              <TableHead>Receipt ID</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {results.map((row, index) => (
               <TableRow key={index}>
                 <TableCell className="font-medium">{row.source_filename}</TableCell>
-                <TableCell>{row.merchant_name}</TableCell>
-                <TableCell>{row.receipt_datetime_local}</TableCell>
-                <TableCell>{row.currency}</TableCell>
+                <TableCell>{row.is_receipt === 'true' ? '✓' : '✗'}</TableCell>
+                <TableCell>{row.merchant_name_localized}</TableCell>
+                <TableCell>{row.date_ISO_8601}</TableCell>
+                <TableCell>{row.currency_ISO_4217}</TableCell>
                 <TableCell className="text-right font-semibold">
                   {row.total_amount}
                 </TableCell>
-                <TableCell>
-                  {row.payment_method}
-                  {row.last4_card && ` ****${row.last4_card}`}
+                <TableCell className="text-right">
+                  {row.vat_amount}
                 </TableCell>
-                <TableCell>{row.category_hint}</TableCell>
+                <TableCell>{row.spend_category}</TableCell>
                 <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                  {row.notes}
+                  {row.receipt_id}
                 </TableCell>
               </TableRow>
             ))}
