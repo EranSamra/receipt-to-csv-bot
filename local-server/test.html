@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt Data Extractor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+        }
+        .upload-area.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        button {
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        #processBtn {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            border: none;
+            color: white;
+        }
+        #processBtn:hover {
+            background: linear-gradient(135deg, #0056b3, #004085);
+        }
+        #processBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #downloadBtn {
+            background: transparent;
+            border: 2px solid #6c757d;
+            color: #6c757d;
+            padding: 10px 22px;
+        }
+        #downloadBtn:hover {
+            background: #6c757d;
+            color: white;
+        }
+        #downloadBtn:disabled {
+            background: #f8f9fa;
+            border-color: #dee2e6;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+        .file-list {
+            margin: 20px 0;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #007bff;
+            transition: width 0.3s;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Receipt Data Extractor</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            Upload your receipts and instantly convert them into structured expense data powered by AI.<br>
+            <strong>Accurate. Secure. Built for Finance Teams.</strong>
+        </p>
+
+        <div class="upload-area" id="uploadArea">
+            <p>📄 Drag & drop or click to upload your receipts</p>
+            <p style="color: #666; font-size: 14px;">Supported formats: JPG, PNG, PDF (Max 1MB each, up to 30 files)</p>
+            <input type="file" id="fileInput" multiple accept="image/*,.pdf">
+        </div>
+
+        <div class="file-list" id="fileList"></div>
+
+        <div style="text-align: center;">
+            <button id="processBtn" disabled>🔍 Extract Data</button>
+            <button id="downloadBtn" disabled>⬇️ Download CSV</button>
+        </div>
+
+        <div class="progress" id="progressContainer" style="display: none;">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div id="status"></div>
+        <div id="results" class="results" style="display: none;"></div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let extractedData = [];
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+
+        // File upload handling
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            updateFileList();
+            processBtn.disabled = selectedFiles.length === 0;
+        }
+
+        function updateFileList() {
+            fileList.innerHTML = selectedFiles.map((file, index) => `
+                <div class="file-item">
+                    <span>📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>
+                    <button onclick="removeFile(${index})">❌ Remove</button>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+            processBtn.disabled = selectedFiles.length === 0;
+        }
+
+        // Process receipts
+        processBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+
+            processBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            status.innerHTML = '<div class="success">🔄 Processing receipts...</div>';
+
+            try {
+                const formData = new FormData();
+                selectedFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+
+                // Simulate progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 10;
+                    progressBar.style.width = Math.min(progress, 90) + '%';
+                }, 200);
+
+                const response = await fetch('http://localhost:3001/api/extract-receipts', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(progressInterval);
+                progressBar.style.width = '100%';
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to process receipts');
+                }
+
+                const data = await response.json();
+                extractedData = parseCSV(data.csv);
+                
+                displayResults(extractedData);
+                downloadBtn.disabled = false;
+                
+                status.innerHTML = `<div class="success">✅ Data extracted successfully<br>Your receipts have been processed using Mesh AI Extraction Engine.</div>`;
+
+            } catch (error) {
+                console.error('Processing error:', error);
+                status.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            } finally {
+                processBtn.disabled = false;
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 1000);
+            }
+        });
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+
+            const headers = lines[0].split(',');
+            const dataRows = lines.slice(1);
+
+            return dataRows.map(row => {
+                // Handle quoted fields with commas
+                const values = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < row.length; i++) {
+                    const char = row[i];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                values.push(current);
+
+                const obj = {};
+                headers.forEach((header, index) => {
+                    obj[header.trim()] = values[index]?.replace(/^"|"$/g, '').replace(/""/g, '"').trim() || '';
+                });
+                return obj;
+            });
+        }
+
+        function displayResults(data) {
+            if (data.length === 0) {
+                results.innerHTML = '<p>No data extracted yet. Upload your receipts and click Extract Data to get started.</p>';
+                return;
+            }
+
+            const headers = Object.keys(data[0]);
+            const tableHTML = `
+                <h3>Extracted Receipt Data</h3>
+                <table>
+                    <thead>
+                        <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                        ${data.map(row => `
+                            <tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            results.innerHTML = tableHTML;
+            results.style.display = 'block';
+        }
+
+        // Download CSV
+        downloadBtn.addEventListener('click', () => {
+            if (extractedData.length === 0) return;
+
+            const csv = convertToCSV(extractedData);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `receipts-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        });
+
+        function convertToCSV(data) {
+            if (data.length === 0) return '';
+            
+            const headers = Object.keys(data[0]);
+            const csvRows = [
+                headers.join(','),
+                ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+            ];
+            
+            return csvRows.join('\n');
+        }
+
+        // Check server status on load
+        fetch('http://localhost:3001/api/health')
+            .then(response => response.json())
+            .then(data => {
+                status.innerHTML = `<div class="success">✅ Server connected: ${data.message}</div>`;
+            })
+            .catch(error => {
+                status.innerHTML = `<div class="error">❌ Server not running. Please start the server first.</div>`;
+            });
+    </script>
+</body>
+</html>
