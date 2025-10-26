@@ -3,6 +3,7 @@ import { Receipt, Sparkles } from "lucide-react";
 import { ReceiptUpload } from "@/components/ReceiptUpload";
 import { ResultsTable, ReceiptData } from "@/components/ResultsTable";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { convertToCSV, downloadCSV } from "@/utils/csvUtils";
 
@@ -10,6 +11,7 @@ const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [results, setResults] = useState<ReceiptData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const { toast } = useToast();
 
   const handleRemoveFile = (index: number) => {
@@ -63,23 +65,27 @@ const Index = () => {
     }
 
     setIsProcessing(true);
+    setProcessingProgress(0);
 
     try {
+      // Simulate progress updates for better UX
+      const progressInterval = setInterval(() => {
+        setProcessingProgress(prev => Math.min(prev + 10, 90));
+      }, 500);
+
       const formData = new FormData();
       selectedFiles.forEach(file => {
         formData.append('files', file);
       });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-receipts`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: formData,
-        }
-      );
+      // Use local server instead of Supabase
+      const response = await fetch('http://localhost:3001/api/extract-receipts', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+      setProcessingProgress(100);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -105,6 +111,7 @@ const Index = () => {
       });
     } finally {
       setIsProcessing(false);
+      setProcessingProgress(0);
     }
   };
 
@@ -133,7 +140,7 @@ const Index = () => {
             <div>
               <h1 className="text-2xl font-bold">Receipt Scanner</h1>
               <p className="text-sm text-muted-foreground">
-                AI-powered expense extraction to CSV
+                AI-powered batch processing for up to 30 receipts at once
               </p>
             </div>
           </div>
@@ -152,16 +159,30 @@ const Index = () => {
             />
             
             {selectedFiles.length > 0 && (
-              <div className="mt-6 flex justify-center">
-                <Button
-                  onClick={handleProcess}
-                  disabled={isProcessing}
-                  size="lg"
-                  className="gap-2 px-8"
-                >
-                  <Sparkles className="h-5 w-5" />
-                  {isProcessing ? 'Processing...' : 'Extract Data'}
-                </Button>
+              <div className="mt-6 space-y-4">
+                <div className="flex justify-center">
+                  <Button
+                    onClick={handleProcess}
+                    disabled={isProcessing}
+                    size="lg"
+                    className="gap-2 px-8"
+                  >
+                    <Sparkles className="h-5 w-5" />
+                    {isProcessing ? 'Processing...' : 'Extract Data'}
+                  </Button>
+                </div>
+                
+                {isProcessing && (
+                  <div className="space-y-2">
+                    <div className="text-center text-sm text-muted-foreground">
+                      Processing {selectedFiles.length} receipt{selectedFiles.length > 1 ? 's' : ''}...
+                    </div>
+                    <Progress value={processingProgress} className="w-full" />
+                    <div className="text-center text-xs text-muted-foreground">
+                      {processingProgress}% complete
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -175,7 +196,7 @@ const Index = () => {
       <footer className="mt-24 border-t bg-card">
         <div className="container mx-auto px-4 py-8">
           <p className="text-center text-sm text-muted-foreground">
-            Powered by Lovable Cloud • Extracts receipts in any language and currency
+            Powered by Mesh AI • Batch processing up to 30 receipts • Extracts receipts in any language and currency
           </p>
         </div>
       </footer>

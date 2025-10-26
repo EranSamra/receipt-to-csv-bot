@@ -1,3 +1,4 @@
+// Alternative approach: Process files one at a time with separate API calls
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -6,30 +7,53 @@ const corsHeaders = {
 };
 
 const currentYear = new Date().getFullYear();
+const spendCategoriesNames = "meals, transportation, lodging, fuel, supplies, entertainment, utilities, other";
 
-const EXTRACTION_PROMPT = `Extract data from each receipt with the following field names:
+const EXTRACTION_PROMPT = `Extract data from this receipt/invoice with the following field names. Handle receipts in any language (Hebrew, English, etc.) and any format (retail receipts, hotel invoices, digital receipts, etc.):
+
+- is_receipt (boolean - true if this is a receipt or invoice, false otherwise)
+- total_amount (numeric value with dot as decimal separator)
+- vat_amount (numeric value with dot as decimal separator, empty if not shown)
+- currency_ISO_4217 (ISO 4217 currency code: USD, EUR, GBP, ILS, etc.)
+- merchant_name_localized (merchant name in original language/script)
+- date_ISO_8601 (ISO 8601 format YYYY-MM-DD or YYYY-MM-DDThh:mm, assume year ${currentYear} if not specified)
+- is_month_explicit (true if date includes textual month like "March", false if fully numeric)
+- receipt_id (receipt/invoice number)
+- merchant_address (full address as shown)
+- document_language_ISO_639 (ISO 639 language code: en, he, fr, es, etc.)
+- all_totals (JSON array of all total amounts found as strings)
+- all_dates (JSON array of all ISO 8601 dates found)
+- spend_category (one of: ${spendCategoriesNames})
 
 CSV Header (exact order):
 source_filename,is_receipt,total_amount,vat_amount,currency_ISO_4217,merchant_name_localized,date_ISO_8601,is_month_explicit,receipt_id,merchant_address,document_language_ISO_639,all_totals,all_dates,spend_category
 
 Field rules:
-- source_filename: original file name if available
-- is_receipt: boolean (true/false) - true if the image is a receipt or invoice, false otherwise
-- total_amount: numeric value with dot as decimal separator
-- vat_amount: numeric value with dot as decimal separator, empty if not shown
-- currency_ISO_4217: ISO 4217 currency code (USD, EUR, GBP, ILS, etc.). If multiple currencies appear, use the one next to total_amount
+- source_filename: original file name
+- is_receipt: boolean (true/false)
+- total_amount: numeric with dot as decimal separator
+- vat_amount: numeric with dot as decimal separator, empty if not shown
+- currency_ISO_4217: ISO 4217 code (USD, EUR, GBP, ILS, etc.)
 - merchant_name_localized: merchant name in original script/language
-- date_ISO_8601: ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDThh:mm). If date has no year, assume ${currentYear}. Leave empty if no date
-- is_month_explicit: boolean (true/false) - true if date includes textual month (e.g., "March", "Mar"), false if fully numeric (e.g., "03/05/2025")
-- receipt_id: any receipt/invoice number shown
-- merchant_address: full address as shown
-- document_language_ISO_639: ISO 639 language code (en, he, fr, es, etc.)
-- all_totals: JSON array of all total amounts found as strings, e.g., ["15.50","17.25"]
-- all_dates: JSON array of all ISO 8601 dates found, e.g., ["2025-03-15","2025-03-16"]. If date has no year, assume ${currentYear}
-- spend_category: one of [meals, transportation, lodging, fuel, supplies, entertainment, utilities, other]
+- date_ISO_8601: ISO 8601 format, assume ${currentYear} if no year
+- is_month_explicit: boolean (true if textual month, false if numeric)
+- receipt_id: receipt/invoice number
+- merchant_address: full address
+- document_language_ISO_639: ISO 639 language code
+- all_totals: JSON array of totals as strings, e.g., ["15.50","17.25"]
+- all_dates: JSON array of ISO 8601 dates, e.g., ["2025-03-15","2025-03-16"]
+- spend_category: one of [${spendCategoriesNames}]
+
+Special instructions:
+- For Hebrew receipts: extract Hebrew text as-is for merchant_name_localized
+- For hotel invoices: use "lodging" as spend_category
+- For digital receipts: extract all available information
+- For retail receipts: determine appropriate spend_category based on items
+- Handle different date formats (DD/MM/YYYY, MM/DD/YYYY, etc.)
+- Extract VAT amounts even if shown as percentages
 
 Return format:
-Output only the CSV text with header and one row per image. No markdown, no code fences, no explanations.`;
+Output only the CSV text with header and one row. No markdown, no code fences, no explanations.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -47,105 +71,116 @@ serve(async (req) => {
       );
     }
 
+    // Limit to 2 files to prevent memory issues
+    if (files.length > 2) {
+      return new Response(
+        JSON.stringify({ error: 'Too many files. Maximum 2 files allowed per request.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: 'API key not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`Processing ${files.length} receipt image(s)`);
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      console.error('LOVABLE_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ error: 'AI service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Process all images in parallel - use chunk-based base64 encoding to avoid stack overflow
-    const imagePromises = files.map(async (file) => {
-      const bytes = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(bytes);
-      
-      // Convert to base64 in chunks to avoid stack overflow
-      let binary = '';
-      const chunkSize = 8192;
-      for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, Array.from(chunk));
-      }
-      const base64 = btoa(binary);
-      
-      return {
-        name: file.name,
-        base64: `data:${file.type};base64,${base64}`
-      };
-    });
-
-    const images = await Promise.all(imagePromises);
-
-    // Build content array with all images
-    const content = [
-      {
-        type: "text",
-        text: `${EXTRACTION_PROMPT}\n\nProcess these ${images.length} receipt image(s) and return a CSV with one row per image.`
-      },
-      ...images.map(img => ({
-        type: "image_url",
-        image_url: { url: img.base64 }
-      }))
-    ];
-
-    console.log('Calling Lovable AI for receipt extraction');
+    // Process files one at a time to avoid memory issues
+    const results = [];
     
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-pro',
-        messages: [
-          {
-            role: 'user',
-            content: content
-          }
-        ],
-      }),
-    });
+    for (const file of files) {
+      try {
+        console.log(`Processing file: ${file.name}, size: ${file.size} bytes`);
+        
+        // Check file size limit (500KB max to prevent memory issues)
+        if (file.size > 500 * 1024) {
+          console.error(`File ${file.name} is too large: ${file.size} bytes`);
+          results.push({
+            filename: file.name,
+            error: `File too large. Maximum size is 500KB.`
+          });
+          continue;
+        }
+        
+        // Convert to base64 using a very simple approach
+        const bytes = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(bytes);
+        
+        // Use a more memory-efficient approach
+        let base64 = '';
+        const chunkSize = 512; // Very small chunks
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+          const chunk = uint8Array.slice(i, i + chunkSize);
+          base64 += btoa(String.fromCharCode(...chunk));
+        }
+        
+        console.log(`Successfully encoded ${file.name}`);
+        
+        // Call Gemini API for this single file
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: `${EXTRACTION_PROMPT}\n\nProcess this receipt image and return a CSV with one row.` },
+                { inline_data: { mime_type: file.type, data: base64 } }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              topK: 32,
+              topP: 1,
+              maxOutputTokens: 4096,
+            }
+          })
+        });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'AI credits exhausted. Please add more credits to continue.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('AI API error:', response.status, errorText);
+          results.push({
+            filename: file.name,
+            error: 'Failed to process with AI'
+          });
+          continue;
+        }
 
-      return new Response(
-        JSON.stringify({ error: 'Failed to process receipts' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        const data = await response.json();
+        const csvContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        
+        // Extract just the data row (skip header if present)
+        const lines = csvContent.trim().split('\n');
+        const dataRow = lines.length > 1 ? lines[1] : lines[0];
+        
+        results.push({
+          filename: file.name,
+          csv: dataRow
+        });
+        
+        console.log(`Successfully processed ${file.name}`);
+        
+      } catch (error) {
+        console.error(`Error processing file ${file.name}:`, error);
+        results.push({
+          filename: file.name,
+          error: error.message
+        });
+      }
     }
-
-    const aiData = await aiResponse.json();
-    const csvContent = aiData.choices?.[0]?.message?.content || '';
     
-    console.log('Extraction successful');
+    // Combine all results into a single CSV
+    const csvHeader = "source_filename,is_receipt,total_amount,vat_amount,currency_ISO_4217,merchant_name_localized,date_ISO_8601,is_month_explicit,receipt_id,merchant_address,document_language_ISO_639,all_totals,all_dates,spend_category";
+    const csvRows = results.map(r => r.csv || `${r.filename},false,,,,,,,,,,,other`);
+    const finalCsv = [csvHeader, ...csvRows].join('\n');
 
     return new Response(
-      JSON.stringify({ csv: csvContent }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+      JSON.stringify({ csv: finalCsv }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {

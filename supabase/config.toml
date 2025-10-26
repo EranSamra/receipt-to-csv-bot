@@ -2,3 +2,6 @@ project_id = "cuqwxshipriohsmrymzy"
 
 [functions.extract-receipts]
 verify_jwt = false
+
+[functions.extract-receipts.env]
+GEMINI_API_KEY = "AIzaSyDFPgjOr32jptNdfFjanuP2Qfy7b2vXBTU"

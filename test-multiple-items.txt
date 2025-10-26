@@ -1,0 +1,27 @@
+Invoice #INV-001
+Coffee Shop ABC
+Date: 2024-01-15
+
+Items:
+- Coffee: .00
+- Sandwich: .50
+- Cookie: .25
+
+Subtotal: .75
+Tax: echo "Invoice #INV-001
+Coffee Shop ABC
+Date: 2024-01-15
+
+Items:
+- Coffee: $5.00
+- Sandwich: $8.50
+- Cookie: $2.25
+
+Subtotal: $15.75
+Tax: $1.26
+Total: $17.01
+
+Payment: Visa **** 1234" > test-multiple-items.txt.26
+Total: .01
+
+Payment: Visa **** 1234

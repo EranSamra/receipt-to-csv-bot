@@ -1,0 +1,5 @@
+Invoice #001 - Store A - .00 - Card
+Invoice #002 - Store B - .50 - Cash
+Invoice #003 - Store C - .75 - Card
+Invoice #004 - Store D - .25 - Card
+Invoice #005 - Store E - .00 - Cash

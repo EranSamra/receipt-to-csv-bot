@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "local-server/server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "local-server/server.js"
+    }
+  ],
+  "env": {
+    "GEMINI_API_KEY": "AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY",
+    "NODE_ENV": "production"
+  }
+}

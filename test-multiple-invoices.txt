@@ -1,0 +1,3 @@
+Invoice #12345 - Coffee Shop - .50 - Card
+Invoice #12345 - Coffee Shop - .00 - Card  
+Invoice #12346 - Bakery - .75 - Cash

@@ -1,0 +1,13 @@
+Receipt #R-789
+Store XYZ
+2024-01-20
+
+Item 1: Laptop - .99
+Item 2: Mouse - .99
+Item 3: Keyboard - .99
+
+Subtotal: .97
+Tax: .80
+Total: .77
+
+Paid with Mastercard

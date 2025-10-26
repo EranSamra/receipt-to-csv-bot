@@ -1,0 +1,12 @@
+version: 0.0.0
+services:
+  web:
+    runtime: node
+    plan: free
+    buildCommand: cd local-server && npm install
+    startCommand: cd local-server && npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        value: AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY
+      - key: NODE_ENV
+        value: production
