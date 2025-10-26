@@ -5,14 +5,17 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build": "echo 'No build step required'",
+    "test": "echo 'No tests specified'"
   },
   "keywords": [
     "receipt",
     "ai",
     "extraction",
     "csv",
-    "gemini"
+    "gemini",
+    "google-cloud"
   ],
   "author": "Receipt Data Extractor",
   "license": "MIT",
