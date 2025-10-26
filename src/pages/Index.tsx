@@ -78,8 +78,8 @@ const Index = () => {
         formData.append('files', file);
       });
 
-      // Use Vercel API route
-      const response = await fetch('/api/extract-receipts', {
+      // Use local server for development
+      const response = await fetch('http://localhost:3001/api/extract-receipts', {
         method: 'POST',
         body: formData,
       });
