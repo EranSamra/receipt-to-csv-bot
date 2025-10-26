@@ -62,9 +62,9 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
       >
         <div className="p-12 text-center">
           <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Upload Receipt Images</h3>
+          <h3 className="text-lg font-semibold mb-2">📄 Drag & drop or click to upload your receipts</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Drag and drop up to 30 receipt images, or click to browse
+            Supported formats: JPG, PNG, PDF (Max 1MB each)
           </p>
           <label htmlFor="file-upload">
             <Button type="button" variant="default" asChild>

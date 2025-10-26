@@ -1,15 +1,4 @@
-const express = require('express');
 const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
-require('dotenv').config();
-
-const app = express();
-const PORT = 3001;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -21,32 +10,39 @@ const upload = multer({
   }
 });
 
-// Gemini API configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY';
-
 // Simple base64 encoding function
 function encodeBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return Buffer.from(binary, 'binary').toString('base64');
+  return Buffer.from(buffer, 'binary').toString('base64');
 }
 
-// Receipt extraction endpoint
-app.post('/api/extract-receipts', (req, res, next) => {
-  upload.array('files', 30)(req, res, (err) => {
-    if (err) {
-      console.error('Multer error:', err);
-      return res.status(400).json({ error: 'File upload error: ' + err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
+export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
     console.log('Processing receipt extraction request...');
     
+    // Handle file upload with multer
+    await new Promise((resolve, reject) => {
+      upload.array('files', 30)(req, res, (err) => {
+        if (err) {
+          console.error('Multer error:', err);
+          return reject(new Error('File upload error: ' + err.message));
+        }
+        resolve();
+      });
+    });
+
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
     }
@@ -76,7 +72,7 @@ app.post('/api/extract-receipts', (req, res, next) => {
         console.log(`Successfully encoded ${file.originalname}`);
         
         // Call Gemini API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -233,37 +229,19 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
     const csvHeader = "Invoice Number,Date,Amount,Currency,Merchant,Transaction Type";
     const csvRows = results.map(r => r.csv || '');
     const finalCsv = [csvHeader, ...csvRows].join('\n');
-
+    
     console.log('Extraction completed successfully');
-    res.json({ csv: finalCsv });
-
+    res.status(200).json({ csv: finalCsv });
+    
   } catch (error) {
-    console.error('Error in extract-receipts endpoint:', error);
-    res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    });
+    console.error('Server error:', error);
+    res.status(500).json({ error: error.message });
   }
-});
+}
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Receipt scanner server is running',
-    geminiApiKey: GEMINI_API_KEY ? 'Configured' : 'Not configured'
-  });
-});
-
-// Serve static files from client
-app.use(express.static(path.join(__dirname, 'client/dist')));
-
-// Catch all handler for client-side routing
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client/dist/index.html'));
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Receipt Scanner Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔑 Gemini API Key: ${GEMINI_API_KEY ? 'Configured' : 'Not configured'}`);
-});
+// Configure the API route to handle multipart/form-data
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};

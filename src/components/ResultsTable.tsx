@@ -40,14 +40,14 @@ export const ResultsTable = ({ results, onDownloadCSV }: ResultsTableProps) => {
     <Card className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Extraction Results</h2>
+          <h2 className="text-2xl font-bold">Extracted Receipt Data</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {results.length} receipt{results.length > 1 ? 's' : ''} processed
           </p>
         </div>
-        <Button onClick={onDownloadCSV} className="gap-2">
+        <Button onClick={onDownloadCSV} className="gap-2 border-gray-300 text-gray-700 hover:bg-gray-50">
           <Download className="h-4 w-4" />
-          Download CSV
+          ⬇️ Download CSV
         </Button>
       </div>
 
@@ -55,35 +55,25 @@ export const ResultsTable = ({ results, onDownloadCSV }: ResultsTableProps) => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>File</TableHead>
-              <TableHead>Is Receipt</TableHead>
-              <TableHead>Merchant</TableHead>
+              <TableHead>Invoice Number</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead>Amount</TableHead>
               <TableHead>Currency</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="text-right">VAT</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Receipt ID</TableHead>
+              <TableHead>Merchant</TableHead>
+              <TableHead>Transaction Type</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {results.map((row, index) => (
               <TableRow key={index}>
-                <TableCell className="font-medium">{row.source_filename}</TableCell>
-                <TableCell>{row.is_receipt === 'true' ? '✓' : '✗'}</TableCell>
-                <TableCell>{row.merchant_name_localized}</TableCell>
-                <TableCell>{row.date_ISO_8601}</TableCell>
-                <TableCell>{row.currency_ISO_4217}</TableCell>
+                <TableCell className="font-medium">{row["Invoice Number"]}</TableCell>
+                <TableCell>{row["Date"]}</TableCell>
                 <TableCell className="text-right font-semibold">
-                  {row.total_amount}
+                  {row["Amount"]}
                 </TableCell>
-                <TableCell className="text-right">
-                  {row.vat_amount}
-                </TableCell>
-                <TableCell>{row.spend_category}</TableCell>
-                <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                  {row.receipt_id}
-                </TableCell>
+                <TableCell>{row["Currency"]}</TableCell>
+                <TableCell>{row["Merchant"]}</TableCell>
+                <TableCell>{row["Transaction Type"]}</TableCell>
               </TableRow>
             ))}
           </TableBody>

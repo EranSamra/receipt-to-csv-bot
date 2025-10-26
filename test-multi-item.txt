@@ -1,0 +1,11 @@
+Invoice #12345 - Coffee Shop - 2024-01-15
+Coffee: .00
+Sandwich: .50
+Tax: sleep 3 && echo "Invoice #12345 - Coffee Shop - 2024-01-15
+Coffee: $5.00
+Sandwich: $8.50
+Tax: $1.35
+Total: $14.85
+Payment: Card" > test-multi-item.txt.35
+Total: .85
+Payment: Card

@@ -78,8 +78,8 @@ const Index = () => {
         formData.append('files', file);
       });
 
-      // Use local server instead of Supabase
-      const response = await fetch('http://localhost:3001/api/extract-receipts', {
+      // Use Vercel API route
+      const response = await fetch('/api/extract-receipts', {
         method: 'POST',
         body: formData,
       });
@@ -98,8 +98,8 @@ const Index = () => {
       setResults(parsedResults);
       
       toast({
-        title: "Success!",
-        description: `Extracted data from ${parsedResults.length} receipt(s)`,
+        title: "✅ Data extracted successfully",
+        description: "Your receipts have been processed using Mesh AI Extraction Engine.",
       });
 
     } catch (error) {
@@ -138,9 +138,10 @@ const Index = () => {
               <Receipt className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Receipt Scanner</h1>
+              <h1 className="text-2xl font-bold">Receipt Data Extractor</h1>
               <p className="text-sm text-muted-foreground">
-                AI-powered batch processing for up to 30 receipts at once
+                Upload your receipts and instantly convert them into structured expense data powered by AI.<br />
+                <strong>Accurate. Secure. Built for Finance Teams.</strong>
               </p>
             </div>
           </div>
@@ -165,10 +166,10 @@ const Index = () => {
                     onClick={handleProcess}
                     disabled={isProcessing}
                     size="lg"
-                    className="gap-2 px-8"
+                    className="gap-2 px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                   >
                     <Sparkles className="h-5 w-5" />
-                    {isProcessing ? 'Processing...' : 'Extract Data'}
+                    {isProcessing ? 'Processing...' : '🔍 Extract Data'}
                   </Button>
                 </div>
                 
