@@ -1,15 +1,3 @@
-const multer = require('multer');
-
-// Configure multer for file uploads
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit per file
-    files: 30 // Allow up to 30 files
-  }
-});
-
 // Simple base64 encoding function
 function encodeBase64(buffer) {
   return Buffer.from(buffer, 'binary').toString('base64');
@@ -32,22 +20,33 @@ export default async function handler(req, res) {
   try {
     console.log('Processing receipt extraction request...');
     
-    // Handle file upload with multer
+    // Check if we have the Gemini API key
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('GEMINI_API_KEY not found in environment variables');
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    // Parse multipart form data manually for Vercel
+    const boundary = req.headers['content-type']?.split('boundary=')[1];
+    if (!boundary) {
+      return res.status(400).json({ error: 'No multipart boundary found' });
+    }
+
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    
     await new Promise((resolve, reject) => {
-      upload.array('files', 30)(req, res, (err) => {
-        if (err) {
-          console.error('Multer error:', err);
-          return reject(new Error('File upload error: ' + err.message));
-        }
-        resolve();
-      });
+      req.on('end', resolve);
+      req.on('error', reject);
     });
 
-    if (!req.files || req.files.length === 0) {
+    const buffer = Buffer.concat(chunks);
+    const files = parseMultipartData(buffer, boundary);
+    
+    if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
     }
 
-    const files = req.files;
     console.log(`Processing ${files.length} file(s)`);
 
     // Process files one at a time to avoid memory issues
@@ -55,21 +54,21 @@ export default async function handler(req, res) {
     
     for (const file of files) {
       try {
-        console.log(`Processing file: ${file.originalname}, size: ${file.size} bytes`);
+        console.log(`Processing file: ${file.filename}, size: ${file.data.length} bytes`);
         
         // Check file size limit (1MB max)
-        if (file.size > 1024 * 1024) {
-          console.error(`File ${file.originalname} is too large: ${file.size} bytes`);
+        if (file.data.length > 1024 * 1024) {
+          console.error(`File ${file.filename} is too large: ${file.data.length} bytes`);
           results.push({
-            filename: file.originalname,
+            filename: file.filename,
             error: 'File too large. Maximum size is 1MB.'
           });
           continue;
         }
         
         // Convert to base64
-        const base64 = encodeBase64(file.buffer);
-        console.log(`Successfully encoded ${file.originalname}`);
+        const base64 = encodeBase64(file.data);
+        console.log(`Successfully encoded ${file.filename}`);
         
         // Call Gemini API
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -149,8 +148,9 @@ Return only the CSV.
 Use commas as separators. No trailing commas.
 
 Do not wrap values in quotes unless a field contains a comma. Dates and amounts should not be quoted.` 
-                },
-                { inline_data: { mime_type: file.mimetype, data: base64 } }
+                  },
+                  { inline_data: { mime_type: file.mimetype, data: base64 } }
+                ]
               ]
             }],
             generationConfig: {
@@ -164,7 +164,7 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
           const errorText = await response.text();
           console.error('Gemini API error:', response.status, errorText);
           results.push({
-            filename: file.originalname,
+            filename: file.filename,
             error: 'Failed to process with AI'
           });
           continue;
@@ -195,12 +195,12 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
                 columns[0] = sharedInvoiceNumber;
                 const updatedRow = columns.join(',');
                 results.push({
-                  filename: file.originalname,
+                  filename: file.filename,
                   csv: updatedRow.trim()
                 });
               } else {
                 results.push({
-                  filename: file.originalname,
+                  filename: file.filename,
                   csv: row.trim()
                 });
               }
@@ -209,17 +209,17 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
         } else if (lines.length === 1 && !lines[0].includes('Invoice Number')) {
           // Single line that's not a header
           results.push({
-            filename: file.originalname,
+            filename: file.filename,
             csv: lines[0].trim()
           });
         }
         
-        console.log(`Successfully processed ${file.originalname}`);
+        console.log(`Successfully processed ${file.filename}`);
         
       } catch (error) {
-        console.error(`Error processing file ${file.originalname}:`, error);
+        console.error(`Error processing file ${file.filename}:`, error);
         results.push({
-          filename: file.originalname,
+          filename: file.filename,
           error: error.message
         });
       }
@@ -237,6 +237,47 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
     console.error('Server error:', error);
     res.status(500).json({ error: error.message });
   }
+}
+
+// Parse multipart form data manually
+function parseMultipartData(buffer, boundary) {
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
+  const parts = [];
+  let start = 0;
+  
+  while (true) {
+    const boundaryIndex = buffer.indexOf(boundaryBuffer, start);
+    if (boundaryIndex === -1) break;
+    
+    if (start > 0) {
+      const partBuffer = buffer.slice(start, boundaryIndex);
+      const file = parsePart(partBuffer);
+      if (file) parts.push(file);
+    }
+    
+    start = boundaryIndex + boundaryBuffer.length;
+  }
+  
+  return parts;
+}
+
+function parsePart(buffer) {
+  const headerEnd = buffer.indexOf('\r\n\r\n');
+  if (headerEnd === -1) return null;
+  
+  const headers = buffer.slice(0, headerEnd).toString();
+  const data = buffer.slice(headerEnd + 4);
+  
+  const filenameMatch = headers.match(/filename="([^"]+)"/);
+  const contentTypeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/);
+  
+  if (!filenameMatch) return null;
+  
+  return {
+    filename: filenameMatch[1],
+    mimetype: contentTypeMatch ? contentTypeMatch[1] : 'application/octet-stream',
+    data: data
+  };
 }
 
 // Configure the API route to handle multipart/form-data
