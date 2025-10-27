@@ -18,7 +18,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
       setIsDragging(false);
       
       const files = Array.from(e.dataTransfer.files).filter(file => 
-        file.type.startsWith('image/')
+        file.type.startsWith('image/') || file.type === 'application/pdf'
       );
       
       if (files.length > 0) {
@@ -40,7 +40,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter(file => 
-      file.type.startsWith('image/')
+      file.type.startsWith('image/') || file.type === 'application/pdf'
     );
     
       if (files.length > 0) {
@@ -77,12 +77,12 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile }: 
             id="file-upload"
             type="file"
             multiple
-            accept="image/*"
+            accept="image/*,.pdf"
             onChange={handleFileInput}
             className="hidden"
           />
           <p className="text-xs text-muted-foreground mt-4">
-            Supports JPG, PNG, WEBP, HEIC formats
+            Supports JPG, PNG, WEBP, HEIC, PDF formats
           </p>
         </div>
       </Card>
