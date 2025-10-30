@@ -107,24 +107,24 @@ serve(async (req) => {
         }
         
         // Convert to base64 using a very simple approach
-        const bytes = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(bytes);
-        
+      const bytes = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(bytes);
+      
         // Use a more memory-efficient approach
         let base64 = '';
         const chunkSize = 512; // Very small chunks
-        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
           const chunk = uint8Array.slice(i, i + chunkSize);
           base64 += btoa(String.fromCharCode(...chunk));
-        }
+      }
         
         console.log(`Successfully encoded ${file.name}`);
-        
+
         // Call Gemini API for this single file
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
+      method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      body: JSON.stringify({
             contents: [{
               parts: [
                 { text: `${EXTRACTION_PROMPT}\n\nProcess this receipt image and return a CSV with one row.` },
@@ -138,7 +138,7 @@ serve(async (req) => {
               maxOutputTokens: 4096,
             }
           })
-        });
+    });
 
         if (!response.ok) {
           const errorText = await response.text();

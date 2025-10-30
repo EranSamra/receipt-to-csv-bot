@@ -87,7 +87,7 @@ Invoice Number,Date,Amount,Currency,Merchant,Transaction Type
 
 Field definitions
 
-Invoice Number: Receipt number, invoice ID, transaction reference, or order number. If multiple rows have the same invoice number, use the same invoice number for all related rows. Leave blank if not found.
+Invoice Number: Receipt number, invoice ID, transaction reference, or order number EXTRACTED FROM THE DOCUMENT. NEVER invent or generate invoice numbers. If no invoice number is visible in the document, leave this field completely empty. If multiple rows have the same invoice number, use the same invoice number for all related rows.
 
 Date: Transaction date in YYYY-MM-DD. If only month and year are present, use the first day of that month. If both order and payment dates appear, use the payment date. Leave blank if unknown.
 
@@ -123,6 +123,8 @@ Extraction rules
 
 One row per distinct receipt or transaction. If a file contains multiple receipts, output one row per receipt.
 
+DUPLICATE DETECTION: If the same receipt appears multiple times in the uploaded files (same merchant, same date, same amount), add "DUPLICATE RECEIPT UPLOADED" to the Merchant field for the duplicate entries. This helps identify when users accidentally upload the same receipt twice.
+
 Prefer "Total" or "Amount paid" for Amount. If a final total exists, do not recompute from subtotal and tax.
 
 Strip currency symbols and thousand separators in Amount. Keep two decimal places when present.
@@ -137,7 +139,7 @@ If payment instrument is unclear but a card brand or last 4 digits appear, set T
 
 If the file is a quote, pro forma, or only a shopping cart with no payment, do not output a row.
 
-If a field is truly missing, leave the cell empty. Do not invent values.
+If a field is truly missing, leave the cell empty. Do not invent values. This is especially important for Invoice Number - only extract what is actually visible in the document. Never generate or create invoice numbers.
 
 Do not add or remove columns. Do not reorder columns. Include the header exactly once.
 
