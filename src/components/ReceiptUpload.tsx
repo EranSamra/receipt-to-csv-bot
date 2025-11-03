@@ -21,9 +21,20 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
       e.preventDefault();
       setIsDragging(false);
       
-      const files = Array.from(e.dataTransfer.files).filter(file => 
-        file.type.startsWith('image/') || file.type === 'application/pdf'
-      );
+      const files = Array.from(e.dataTransfer.files).filter(file => {
+        // Mobile Safari often has empty file.type for HEIC files
+        // Check by file extension as fallback
+        const fileName = file.name.toLowerCase();
+        const isImageByType = file.type.startsWith('image/');
+        const isPDFByType = file.type === 'application/pdf';
+        
+        // Fallback: Check by extension for mobile browsers
+        const isImageByExtension = /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(fileName);
+        const isPDFByExtension = fileName.endsWith('.pdf');
+        
+        // Accept if type matches OR extension matches (mobile fallback)
+        return isImageByType || isPDFByType || isImageByExtension || isPDFByExtension;
+      });
       
       if (files.length > 0) {
         onFilesSelected([...selectedFiles, ...files].slice(0, 30));
@@ -43,13 +54,24 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
   }, []);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).filter(file => 
-      file.type.startsWith('image/') || file.type === 'application/pdf'
-    );
+    const files = Array.from(e.target.files || []).filter(file => {
+      // Mobile Safari often has empty file.type for HEIC files
+      // Check by file extension as fallback
+      const fileName = file.name.toLowerCase();
+      const isImageByType = file.type.startsWith('image/');
+      const isPDFByType = file.type === 'application/pdf';
+      
+      // Fallback: Check by extension for mobile browsers
+      const isImageByExtension = /\.(jpg|jpeg|png|gif|webp|heic|heif)$/i.test(fileName);
+      const isPDFByExtension = fileName.endsWith('.pdf');
+      
+      // Accept if type matches OR extension matches (mobile fallback)
+      return isImageByType || isPDFByType || isImageByExtension || isPDFByExtension;
+    });
     
-      if (files.length > 0) {
-        onFilesSelected([...selectedFiles, ...files].slice(0, 30));
-      }
+    if (files.length > 0) {
+      onFilesSelected([...selectedFiles, ...files].slice(0, 30));
+    }
   };
 
   return (

@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { convertToCSV, downloadCSV } from "@/utils/csvUtils";
 import { ParticleTextEffect } from "@/components/ui/particle-text-effect";
+import { logMobileFileInfo, logMobileFetchInfo, logMobileError, detectMobileDevice } from "@/utils/mobileDebug";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -108,9 +109,13 @@ const Index = () => {
         setProcessingProgress(prev => Math.min(prev + 10, 90));
       }, 500);
 
+      // Mobile debugging - Log file info
+      logMobileFileInfo(selectedFiles);
+
       const formData = new FormData();
-      selectedFiles.forEach(file => {
+      selectedFiles.forEach((file, index) => {
         formData.append('files', file);
+        console.log(`📎 Added file ${index + 1}: ${file.name} (${file.type || 'NO TYPE'})`);
       });
 
       // Environment-based API URL: localhost for dev, relative path for production (Vercel)
@@ -118,11 +123,18 @@ const Index = () => {
         ? 'http://localhost:3001/api/extract-receipts'
         : '/api/extract-receipts';
 
-      // Mobile debugging logs
+      // Mobile debugging - Log fetch info
+      logMobileFetchInfo(API_URL, formData);
+
+      // Enhanced mobile logs
+      const deviceInfo = detectMobileDevice();
       console.log('🌐 API URL:', API_URL);
+      console.log('📱 Device Type:', deviceInfo.isMobile ? 'Mobile' : 'Desktop');
       console.log('📱 User Agent:', navigator.userAgent);
       console.log('📊 Files to upload:', selectedFiles.length);
       console.log('💾 Total size:', selectedFiles.reduce((sum, f) => sum + f.size, 0), 'bytes');
+      console.log('📱 Platform:', deviceInfo.platform);
+      console.log('👆 Touch Support:', deviceInfo.touchSupport);
       
       // Create AbortController for timeout handling (mobile-friendly)
       const controller = new AbortController();
@@ -147,12 +159,37 @@ const Index = () => {
         clearTimeout(timeoutId);
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
+        
+        // Mobile debugging - Log fetch error
+        logMobileError(fetchError, 'Fetch Request');
+        
         if (fetchError.name === 'AbortError') {
           throw new Error('Request timed out. Please check your connection and try again.');
         }
-        if (fetchError.name === 'TypeError' && fetchError.message.includes('Failed to fetch')) {
+        
+        if (fetchError.name === 'TypeError' && fetchError.message?.includes('Failed to fetch')) {
           throw new Error('Network error. Please check your internet connection.');
         }
+        
+        // Mobile-specific: Convert non-Error objects to Error instances with proper message
+        if (!(fetchError instanceof Error)) {
+          let errorMsg = 'Network request failed';
+          
+          if (fetchError?.message && typeof fetchError.message === 'string') {
+            errorMsg = fetchError.message;
+          } else if (fetchError?.error && typeof fetchError.error === 'string') {
+            errorMsg = fetchError.error;
+          } else if (typeof fetchError === 'string') {
+            errorMsg = fetchError;
+          } else if (fetchError && typeof fetchError === 'object') {
+            // Try to extract meaningful info
+            const msg = fetchError.message || fetchError.error || fetchError.msg;
+            errorMsg = (typeof msg === 'string' && msg !== '[object Object]') ? msg : 'Network request failed';
+          }
+          
+          throw new Error(errorMsg);
+        }
+        
         throw fetchError;
       }
 
@@ -160,12 +197,80 @@ const Index = () => {
       setProcessingProgress(100);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process receipts');
+        let errorMessage = 'Failed to process receipts';
+        const status = response.status;
+        
+        try {
+          const contentType = response.headers.get('content-type') || '';
+          
+          if (contentType.includes('application/json')) {
+            const errorData = await response.json();
+            
+            // Safely extract error message
+            if (typeof errorData === 'string') {
+              errorMessage = errorData;
+            } else if (errorData?.error && typeof errorData.error === 'string') {
+              errorMessage = errorData.error;
+            } else if (errorData?.message && typeof errorData.message === 'string') {
+              errorMessage = errorData.message;
+            } else if (typeof errorData === 'object') {
+              // Try to extract from object without using JSON.stringify on nested objects
+              const errorStr = JSON.stringify(errorData);
+              if (errorStr && errorStr !== '{}' && errorStr !== 'null') {
+                errorMessage = errorStr.length < 200 ? errorStr : `Server error: ${status}`;
+              } else {
+                errorMessage = `Server error: ${status}`;
+              }
+            } else {
+              errorMessage = `Server error: ${status}`;
+            }
+          } else {
+            // Try to get text response (mobile browsers might return HTML)
+            try {
+              const errorText = await response.text();
+              errorMessage = errorText && errorText.length < 500 ? errorText : `Server error: ${status}`;
+            } catch (textError) {
+              errorMessage = `Server error: ${status} ${response.statusText || 'Unknown error'}`;
+            }
+          }
+        } catch (parseError: any) {
+          // If parsing fails completely, use status code
+          errorMessage = `Server error: ${status} ${response.statusText || 'Unknown error'}`;
+          console.error('Failed to parse error response:', parseError);
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Parse success response
+      let data;
+      try {
+        data = await response.json();
+        
+        // Validate response structure
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid response format from server');
+        }
+        
+        if (!data.csv || typeof data.csv !== 'string') {
+          throw new Error('No CSV data received from server');
+        }
+        
+        if (data.csv.trim().length === 0) {
+          throw new Error('Received empty CSV data');
+        }
+      } catch (parseError: any) {
+        if (parseError instanceof Error && parseError.message.includes('response format')) {
+          throw parseError;
+        }
+        throw new Error(`Failed to parse server response: ${parseError.message || 'Unknown error'}`);
+      }
       const parsedResults = parseCSVToResults(data.csv);
+
+      // Validate parsed results
+      if (!parsedResults || parsedResults.length === 0) {
+        throw new Error('No valid receipt data extracted. Please ensure your receipts contain extractable information.');
+      }
       
       setResults(parsedResults);
       setShowResults(true);
@@ -180,25 +285,109 @@ const Index = () => {
       });
 
     } catch (error: any) {
-      console.error('Processing error:', error);
+      clearInterval(progressInterval);
       
-      // Enhanced error messages for mobile
+      // Mobile debugging - Log error details
+      logMobileError(error, 'Receipt Processing');
+      
+      // Mobile-friendly error extraction - prevent "[object Object]"
       let errorMessage = "Failed to process receipts";
       let errorTitle = "Processing failed";
       
+      // Comprehensive error extraction for mobile browsers
       if (error instanceof Error) {
-        if (error.message.includes('timed out')) {
-          errorTitle = "Request Timeout";
-          errorMessage = "The request took too long. Please check your internet connection and try again.";
-        } else if (error.message.includes('Network error') || error.message.includes('Failed to fetch')) {
-          errorTitle = "Network Error";
-          errorMessage = "Unable to connect to the server. Please check your internet connection.";
-        } else if (error.message.includes('CORS')) {
-          errorTitle = "Connection Error";
-          errorMessage = "Unable to connect to the server. Please try again.";
-        } else {
+        // Standard Error object
+        errorMessage = error.message || String(error) || "Unknown error";
+      } else if (error && typeof error === 'object') {
+        // Handle error objects that aren't Error instances (common on mobile)
+        
+        // Try to extract message from common properties
+        if (error.message && typeof error.message === 'string' && error.message !== '[object Object]') {
           errorMessage = error.message;
+        } else if (error.error && typeof error.error === 'string') {
+          errorMessage = error.error;
+        } else if (error.msg && typeof error.msg === 'string') {
+          errorMessage = error.msg;
+        } else if (error.statusText && typeof error.statusText === 'string') {
+          errorMessage = error.statusText;
+        } else {
+          // Try to extract meaningful info from the object
+          const errorKeys = Object.keys(error);
+          if (errorKeys.length > 0) {
+            // Try to find string values in the object
+            let foundMessage = null;
+            for (const key of errorKeys) {
+              const value = error[key];
+              if (typeof value === 'string' && value && value !== '[object Object]') {
+                foundMessage = value;
+                break;
+              }
+            }
+            
+            if (foundMessage) {
+              errorMessage = foundMessage;
+            } else {
+              // Last resort: show error structure without "[object Object]"
+              const errorSummary = errorKeys.slice(0, 3).map(key => {
+                const val = error[key];
+                if (typeof val === 'string') {
+                  return `${key}: ${val.substring(0, 50)}`;
+                } else if (typeof val === 'number' || typeof val === 'boolean') {
+                  return `${key}: ${val}`;
+                }
+                return null;
+              }).filter(Boolean).join(', ');
+              
+              errorMessage = errorSummary || "An error occurred. Please try again.";
+            }
+          } else {
+            errorMessage = "An unexpected error occurred";
+          }
         }
+      } else if (error !== null && error !== undefined) {
+        // Primitive types - convert to string safely
+        try {
+          errorMessage = String(error);
+          // If it's still "[object Object]", provide a better message
+          if (errorMessage === '[object Object]') {
+            errorMessage = "An unexpected error occurred. Please try again.";
+          }
+        } catch (strError) {
+          errorMessage = "An error occurred but could not be displayed";
+        }
+      }
+      
+      // Enhanced error categorization
+      const lowerMessage = errorMessage.toLowerCase();
+      
+      if (lowerMessage.includes('timed out') || lowerMessage.includes('timeout') || lowerMessage.includes('aborted')) {
+        errorTitle = "Request Timeout";
+        errorMessage = "The request took too long. Please check your internet connection and try again.";
+      } else if (lowerMessage.includes('network error') || lowerMessage.includes('failed to fetch') || lowerMessage.includes('networkerror') || lowerMessage.includes('load failed')) {
+        errorTitle = "Network Error";
+        errorMessage = "Unable to connect to the server. Please check your internet connection and try again.";
+      } else if (lowerMessage.includes('cors')) {
+        errorTitle = "Connection Error";
+        errorMessage = "Unable to connect to the server. Please try again.";
+      } else if (lowerMessage.includes('json') || lowerMessage.includes('parse') || lowerMessage.includes('unexpected token')) {
+        errorTitle = "Data Format Error";
+        errorMessage = "The server returned invalid data. Please try again.";
+      } else if (lowerMessage.includes('empty') || lowerMessage.includes('no valid')) {
+        errorTitle = "No Data Extracted";
+        errorMessage = "Unable to extract data from receipts. Please ensure your receipts are clear and readable.";
+      } else if (lowerMessage.includes('quota') || lowerMessage.includes('rate limit') || lowerMessage.includes('429')) {
+        errorTitle = "Service Limit Reached";
+        errorMessage = "API quota exceeded. Please try again later.";
+      } else if (lowerMessage.includes('401') || lowerMessage.includes('unauthorized')) {
+        errorTitle = "Authentication Error";
+        errorMessage = "Authentication failed. Please contact support.";
+      } else if (lowerMessage.includes('500') || lowerMessage.includes('internal server')) {
+        errorTitle = "Server Error";
+        errorMessage = "An error occurred on the server. Please try again later.";
+      } else if (lowerMessage.includes('object object') || errorMessage === '[object Object]') {
+        // Mobile-specific: Catch "[object Object]" and provide helpful message
+        errorTitle = "Processing Error";
+        errorMessage = "An unexpected error occurred. Please check your internet connection and try again.";
       }
       
       toast({

@@ -49,10 +49,52 @@ export default async function handler(req, res) {
     });
 
     const buffer = Buffer.concat(chunks);
+    const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    
+    console.log(`📦 Received ${chunks.length} chunks, total size: ${buffer.length} bytes`);
+    console.log(`📱 Detected as: ${isMobile ? 'Mobile' : 'Desktop'} device`);
+    
+    // Debug: Log first 500 bytes to see format (mobile browsers may differ)
+    if (buffer.length > 0) {
+      const preview = buffer.slice(0, Math.min(500, buffer.length)).toString('utf8', 0, Math.min(500, buffer.length));
+      console.log('📋 Buffer preview (first 500 bytes):', preview.substring(0, 200) + '...');
+      
+      // Check for mobile-specific markers
+      if (preview.includes('\n\n') && !preview.includes('\r\n\r\n')) {
+        console.warn('⚠️ Mobile browser detected: Uses \\n\\n instead of \\r\\n\\r\\n');
+      }
+    }
+    
     const files = parseMultipartData(buffer, boundary);
+    console.log(`📁 Parsed ${files.length} file(s) from multipart data`);
+    
+    // Log each parsed file for debugging
+    files.forEach((file, index) => {
+      console.log(`📄 File ${index + 1}:`, {
+        filename: file.filename,
+        mimetype: file.mimetype,
+        size: `${(file.data.length / 1024).toFixed(2)} KB`,
+        hasData: file.data.length > 0
+      });
+    });
     
     if (!files || files.length === 0) {
-      return res.status(400).json({ error: 'No files provided' });
+      console.error('❌ No files parsed from multipart data');
+      console.error('Debug Info:', {
+        boundary,
+        bufferLength: buffer.length,
+        chunksCount: chunks.length,
+        userAgent,
+        isMobile,
+        contentType: req.headers['content-type']
+      });
+      return res.status(400).json({ 
+        error: 'No files provided. Please ensure your files are valid images or PDFs.',
+        debug: isMobile ? {
+          suggestion: 'If using iOS, try converting HEIC files to JPEG first',
+          detectedDevice: 'Mobile'
+        } : {}
+      });
     }
 
     console.log(`Processing ${files.length} file(s)`);
@@ -228,9 +270,20 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
         
       } catch (error) {
         console.error(`Error processing file ${file.filename}:`, error);
+        
+        // Safe error message extraction
+        let errorMsg = 'Unknown error occurred';
+        if (error instanceof Error) {
+          errorMsg = error.message;
+        } else if (error && typeof error === 'object' && error.message) {
+          errorMsg = String(error.message);
+        } else if (error !== null && error !== undefined) {
+          errorMsg = String(error);
+        }
+        
         results.push({
           filename: file.filename,
-          error: error.message
+          error: `Processing error: ${errorMsg}`
         });
       }
     }
@@ -245,7 +298,21 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
     
   } catch (error) {
     console.error('Server error:', error);
-    res.status(500).json({ error: error.message });
+    
+    // Safe error message extraction
+    let errorMsg = 'Internal server error';
+    if (error instanceof Error) {
+      errorMsg = error.message;
+    } else if (error && typeof error === 'object' && error.message) {
+      errorMsg = String(error.message);
+    } else if (error !== null && error !== undefined) {
+      errorMsg = String(error);
+    }
+    
+    res.status(500).json({ 
+      error: errorMsg,
+      details: process.env.NODE_ENV === 'development' ? String(error) : undefined
+    });
   }
 }
 
@@ -272,20 +339,69 @@ function parseMultipartData(buffer, boundary) {
 }
 
 function parsePart(buffer) {
-  const headerEnd = buffer.indexOf('\r\n\r\n');
-  if (headerEnd === -1) return null;
+  // Try both \r\n\r\n and \n\n (mobile browsers may use different line endings)
+  let headerEnd = buffer.indexOf('\r\n\r\n');
+  let headerEndOffset = 4;
+  if (headerEnd === -1) {
+    headerEnd = buffer.indexOf('\n\n');
+    headerEndOffset = 2;
+  }
+  if (headerEnd === -1) {
+    console.warn('⚠️ Could not find header end in multipart data');
+    return null;
+  }
   
   const headers = buffer.slice(0, headerEnd).toString();
-  const data = buffer.slice(headerEnd + 4);
+  const data = buffer.slice(headerEnd + headerEndOffset);
   
-  const filenameMatch = headers.match(/filename="([^"]+)"/);
-  const contentTypeMatch = headers.match(/Content-Type:\s*([^\r\n]+)/);
+  // More flexible filename matching (handle mobile browser differences)
+  const filenameMatch = headers.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+  const contentTypeMatch = headers.match(/Content-Type:\s*([^\r\n;]+)/i);
   
-  if (!filenameMatch) return null;
+  let filename = null;
+  if (filenameMatch) {
+    // Extract filename from the match
+    let matchedFilename = filenameMatch[1];
+    // Remove quotes if present
+    if ((matchedFilename.startsWith('"') && matchedFilename.endsWith('"')) ||
+        (matchedFilename.startsWith("'") && matchedFilename.endsWith("'"))) {
+      matchedFilename = matchedFilename.slice(1, -1);
+    }
+    filename = matchedFilename.trim();
+  }
+  
+  if (!filename || filename === '') {
+    console.warn('⚠️ Could not extract filename from multipart data');
+    return null;
+  }
+  
+  // Better MIME type detection for mobile
+  let mimetype = 'application/octet-stream';
+  if (contentTypeMatch) {
+    mimetype = contentTypeMatch[1].trim();
+  } else {
+    // Fallback: Detect MIME type from filename
+    const lowerFilename = filename.toLowerCase();
+    if (/\.(jpg|jpeg)$/i.test(lowerFilename)) {
+      mimetype = 'image/jpeg';
+    } else if (/\.png$/i.test(lowerFilename)) {
+      mimetype = 'image/png';
+    } else if (/\.(heic|heif)$/i.test(lowerFilename)) {
+      mimetype = 'image/heic'; // Some mobile browsers use this
+    } else if (/\.webp$/i.test(lowerFilename)) {
+      mimetype = 'image/webp';
+    } else if (/\.pdf$/i.test(lowerFilename)) {
+      mimetype = 'application/pdf';
+    } else if (/\.(gif)$/i.test(lowerFilename)) {
+      mimetype = 'image/gif';
+    }
+  }
+  
+  console.log(`📄 Parsed file: ${filename}, type: ${mimetype}, size: ${data.length} bytes`);
   
   return {
-    filename: filenameMatch[1],
-    mimetype: contentTypeMatch ? contentTypeMatch[1] : 'application/octet-stream',
+    filename: filename,
+    mimetype: mimetype,
     data: data
   };
 }
