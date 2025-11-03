@@ -56,7 +56,7 @@ export const ExamplesUpload = ({ onOpenModal, isProcessing }: ExamplesUploadProp
 
         {/* Clickable Hint */}
         <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base md:text-lg px-2">
-          Click to browse sample receipts
+          Click to browse 10 sample receipts
         </p>
       </div>
     </div>

@@ -29,8 +29,15 @@ const exampleReceipts: ExampleReceipt[] = [
     id: "restaurant-receipt",
     name: "Restaurant Receipt",
     description: "Dining receipt with multiple items",
-    filename: "restaurant-receipt.png",
-    thumbnail: "/sample-receipts/restaurant-receipt.png"
+    filename: "restaurant-receipt.jpeg",
+    thumbnail: "/sample-receipts/restaurant-receipt.jpeg"
+  },
+  {
+    id: "whataburger-receipt",
+    name: "Whataburger Receipt",
+    description: "Fast food restaurant receipt with modifications",
+    filename: "whataburger-receipt.png",
+    thumbnail: "/sample-receipts/whataburger-receipt.png"
   },
   {
     id: "gas-station-receipt",
@@ -62,8 +69,8 @@ const exampleReceipts: ExampleReceipt[] = [
   },
   {
     id: "office-supplies",
-    name: "Office Supplies",
-    description: "Business equipment and supplies",
+    name: "Google Ads",
+    description: "Digital advertising campaign receipt",
     filename: "office-supplies.png",
     thumbnail: "/sample-receipts/office-supplies.png"
   },
@@ -90,12 +97,16 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
   if (!isOpen) return null;
 
   const toggleReceipt = (receipt: ExampleReceipt) => {
+    // Always update preview when clicking any card
+    console.log('Clicking on receipt:', receipt.name, 'Current preview:', previewReceipt?.name);
     setPreviewReceipt(receipt);
-    setSelectedReceipts(prev =>
-      prev.includes(receipt.id)
+    setSelectedReceipts(prev => {
+      const newSelection = prev.includes(receipt.id)
         ? prev.filter(id => id !== receipt.id)
-        : [...prev, receipt.id]
-    );
+        : [...prev, receipt.id];
+      console.log('New selection:', newSelection);
+      return newSelection;
+    });
   };
 
   const handleLoadSelected = async () => {
@@ -189,11 +200,10 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
                   {/* Thumbnail - Larger on mobile */}
                   <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                     <img
-                      src={receipt.thumbnail}
+                      src={`${receipt.thumbnail}?v=${Date.now()}`}
                       alt={receipt.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        // Fallback to placeholder if image fails to load
                         e.currentTarget.style.display = 'none';
                         e.currentTarget.nextElementSibling?.classList.remove('hidden');
                       }}
@@ -227,29 +237,43 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
             </p>
           </div>
 
-          <div className="flex-1 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden min-h-[200px] sm:min-h-[300px]">
+          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[200px] sm:min-h-[300px] relative">
             {previewReceipt ? (
-              <img
-                src={previewReceipt.thumbnail}
-                alt={previewReceipt.name}
-                className="max-w-full max-h-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                }}
-              />
+              <div key={previewReceipt.id} className="w-full h-full relative">
+                <img
+                  src={`${previewReceipt.thumbnail}?v=${Date.now()}`}
+                  alt={previewReceipt.name}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                {/* Fallback for failed images */}
+                <div className="hidden absolute inset-0 flex items-center justify-center text-center text-gray-500">
+                  <div>
+                    <Eye className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-2 text-gray-400" />
+                    <p className="text-xs sm:text-sm">Preview not available</p>
+                  </div>
+                </div>
+                {/* Receipt info overlay */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-3">
+                  <h4 className="text-sm sm:text-base font-semibold mb-1">
+                    {previewReceipt.name}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-gray-200">
+                    {previewReceipt.description}
+                  </p>
+                </div>
+              </div>
             ) : (
-              <div className="text-center text-gray-500">
-                <Eye className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-gray-400" />
-                <p className="text-sm sm:text-base">Click a thumbnail to preview</p>
+              <div className="absolute inset-0 flex items-center justify-center text-center text-gray-500">
+                <div>
+                  <Eye className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-sm sm:text-base">Click a thumbnail to preview</p>
+                </div>
               </div>
             )}
-            
-            {/* Fallback for failed images */}
-            <div className="hidden text-center text-gray-500">
-              <Eye className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-sm sm:text-base">Preview not available</p>
-            </div>
           </div>
 
           {/* Action Buttons */}

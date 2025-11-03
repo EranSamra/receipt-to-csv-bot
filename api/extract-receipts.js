@@ -4,10 +4,11 @@ function encodeBase64(buffer) {
 }
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Enable CORS for mobile browsers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -18,7 +19,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Processing receipt extraction request...');
+    // Mobile debugging logs
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    const origin = req.headers['origin'] || 'Unknown';
+    console.log('📱 Processing receipt extraction request...');
+    console.log('🌐 Origin:', origin);
+    console.log('📱 User Agent:', userAgent);
+    console.log('📦 Content-Type:', req.headers['content-type']);
+    console.log('📏 Content-Length:', req.headers['content-length']);
     
     // Check if we have the Gemini API key
     if (!process.env.GEMINI_API_KEY) {

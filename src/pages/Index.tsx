@@ -113,11 +113,48 @@ const Index = () => {
         formData.append('files', file);
       });
 
-      // Use local server for development
-      const response = await fetch('http://localhost:3001/api/extract-receipts', {
-        method: 'POST',
-        body: formData,
-      });
+      // Environment-based API URL: localhost for dev, relative path for production (Vercel)
+      const API_URL = import.meta.env.DEV 
+        ? 'http://localhost:3001/api/extract-receipts'
+        : '/api/extract-receipts';
+
+      // Mobile debugging logs
+      console.log('🌐 API URL:', API_URL);
+      console.log('📱 User Agent:', navigator.userAgent);
+      console.log('📊 Files to upload:', selectedFiles.length);
+      console.log('💾 Total size:', selectedFiles.reduce((sum, f) => sum + f.size, 0), 'bytes');
+      
+      // Create AbortController for timeout handling (mobile-friendly)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        clearInterval(progressInterval);
+        setProcessingProgress(0);
+      }, 120000); // 2 minute timeout
+
+      let response;
+      try {
+        response = await fetch(API_URL, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+          // Note: Don't set Content-Type header - browser needs to set it with boundary for FormData
+          // Accept header is fine though
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timed out. Please check your connection and try again.');
+        }
+        if (fetchError.name === 'TypeError' && fetchError.message.includes('Failed to fetch')) {
+          throw new Error('Network error. Please check your internet connection.');
+        }
+        throw fetchError;
+      }
 
       clearInterval(progressInterval);
       setProcessingProgress(100);
@@ -142,11 +179,31 @@ const Index = () => {
         description: "Your receipts have been processed using Mesh AI Extraction Engine.",
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Processing error:', error);
+      
+      // Enhanced error messages for mobile
+      let errorMessage = "Failed to process receipts";
+      let errorTitle = "Processing failed";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timed out')) {
+          errorTitle = "Request Timeout";
+          errorMessage = "The request took too long. Please check your internet connection and try again.";
+        } else if (error.message.includes('Network error') || error.message.includes('Failed to fetch')) {
+          errorTitle = "Network Error";
+          errorMessage = "Unable to connect to the server. Please check your internet connection.";
+        } else if (error.message.includes('CORS')) {
+          errorTitle = "Connection Error";
+          errorMessage = "Unable to connect to the server. Please try again.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
-        title: "Processing failed",
-        description: error instanceof Error ? error.message : "Failed to process receipts",
+        title: errorTitle,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
