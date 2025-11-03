@@ -550,7 +550,7 @@ const Index = () => {
                           onClick={handleProcess}
                           disabled={isProcessing}
                           size="lg"
-                          className="mesh-btn-primary text-lg px-12 py-4"
+                          className="bg-[#14b8a6] hover:bg-[#0d9488] text-white font-semibold text-lg px-12 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                         >
                           {isProcessing ? (
                             <>

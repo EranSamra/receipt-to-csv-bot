@@ -57,8 +57,8 @@ const exampleReceipts: ExampleReceipt[] = [
     id: "grocery-receipt",
     name: "Grocery Store",
     description: "Supermarket shopping receipt",
-    filename: "grocery-receipt.png",
-    thumbnail: "/sample-receipts/grocery-receipt.png"
+    filename: "grocery-receipt.jpeg",
+    thumbnail: "/sample-receipts/grocery-receipt.jpeg"
   },
   {
     id: "pharmacy-receipt",
@@ -71,8 +71,8 @@ const exampleReceipts: ExampleReceipt[] = [
     id: "office-supplies",
     name: "Google Ads",
     description: "Digital advertising campaign receipt",
-    filename: "office-supplies.png",
-    thumbnail: "/sample-receipts/office-supplies.png"
+    filename: "google ads.png",
+    thumbnail: "/sample-receipts/google ads.png"
   },
   {
     id: "transport-receipt",
@@ -288,7 +288,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
             <Button
               onClick={handleLoadSelected}
               disabled={selectedReceipts.length === 0}
-              className="flex-1 mesh-btn-primary order-1 sm:order-2"
+              className="flex-1 bg-[#14b8a6] hover:bg-[#0d9488] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 order-1 sm:order-2"
             >
               Load Selected ({selectedReceipts.length})
             </Button>
