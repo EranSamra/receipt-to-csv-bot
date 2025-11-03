@@ -203,8 +203,7 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
                   },
                   { inline_data: { mime_type: file.mimetype, data: base64 } }
                 ]
-              ]
-            }],
+              }],
             generationConfig: {
               temperature: 0.1,
               maxOutputTokens: 2048,
