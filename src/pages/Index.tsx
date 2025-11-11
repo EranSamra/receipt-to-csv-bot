@@ -268,7 +268,8 @@ const Index = () => {
       setShowResults(true);
       setShowConfetti(true);
     } else {
-      // Not captured, show lead gate first
+      // Not captured, show lead gate first (but still set results so they're ready)
+      setShowResults(true); // Set results so they're ready to show after form submission
       setShowLeadGate(true);
       setShowConfetti(true);
     }
@@ -670,7 +671,7 @@ const Index = () => {
   };
 
   return (
-    <div className={`min-h-screen mesh-gradient-dark ${showLeadGate ? 'blur-sm pointer-events-none select-none' : ''}`}>
+    <div className="min-h-screen mesh-gradient-dark">
       {/* Particle Text Effect Overlay */}
       {showParticleEffect && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
@@ -849,7 +850,7 @@ const Index = () => {
       {showResults && results.length > 0 && (
         <section 
           id="results-section" 
-          className={`py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden ${showLeadGate ? 'blur-md pointer-events-none select-none' : ''}`}
+          className="py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden"
         >
           {/* Background decoration */}
           <div className="absolute inset-0 opacity-5">

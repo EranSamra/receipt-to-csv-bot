@@ -383,3 +383,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--mesh-turquoise-light));
 }
+
+/* Lead Gate Styles - Blur page when gate is open */
+.lead-gated #root {
+  filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}

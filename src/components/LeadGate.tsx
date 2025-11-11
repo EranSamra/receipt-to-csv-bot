@@ -72,18 +72,31 @@ export const LeadGate = ({ isOpen, onClose, onFormSubmitted }: LeadGateProps) =>
     });
   };
 
+  // Apply blur to document when gate is open
+  useEffect(() => {
+    if (isOpen) {
+      document.documentElement.classList.add('lead-gated');
+    } else {
+      document.documentElement.classList.remove('lead-gated');
+    }
+    return () => {
+      document.documentElement.classList.remove('lead-gated');
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <>
       {/* Overlay */}
       <div
+        id="lead-overlay"
         className="fixed inset-0 bg-black/45 z-[9998]"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="fixed inset-0 grid place-items-center p-4 z-[9999] pointer-events-none">
+      <div id="lead-modal" className="fixed inset-0 grid place-items-center p-4 z-[9999] pointer-events-none">
         <div className="w-full max-w-[440px] bg-white rounded-2xl shadow-2xl p-5 pointer-events-auto">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
             Get the CSV to your email
