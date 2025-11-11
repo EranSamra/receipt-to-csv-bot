@@ -231,19 +231,40 @@ export default function MeshReceiptScanner({
     // Log summary - note: items state might be stale, so we log what we know from processing
     console.log(`[Scanner] Successfully extracted receipts from ${results.length > 0 ? 'some' : 'no'} files`);
     
+    // Count successful vs failed files
+    const successfulFiles = currentItems.filter((item, idx) => {
+      // Check if this file produced results
+      // Since we process sequentially, we can check by index
+      return results.length > idx || results.some(r => r !== null && r !== undefined);
+    }).length;
+    
+    console.log(`[Scanner] Summary: ${successfulFiles}/${currentItems.length} files produced results, ${results.length} total receipts extracted`);
+    
     if (results.length > 0) {
       console.log(`[Scanner] Calling onScanComplete with ${results.length} receipts`);
       onScanComplete(results);
     } else {
-      // Check if any items have errors
-      setItems((prev) => {
-        const hasErrors = prev.some(i => i.status === "error");
-        if (hasErrors && results.length === 0 && onError) {
-          console.error(`[Scanner] All files failed. Calling onError`);
-          onError(new Error("All receipts failed to extract"));
-        }
-        return prev;
-      });
+      // Check if any items have errors - but wait for state to update
+      setTimeout(() => {
+        setItems((prev) => {
+          const hasErrors = prev.some(i => i.status === "error");
+          const allFailed = prev.every(i => i.status === "error" || i.status === "queued");
+          
+          console.log(`[Scanner] Error check: hasErrors=${hasErrors}, allFailed=${allFailed}, results.length=${results.length}`);
+          
+          if (allFailed && results.length === 0 && onError) {
+            console.error(`[Scanner] All files failed. Calling onError`);
+            const errorMsg = hasErrors 
+              ? "All receipts failed to extract. Please check the console for details."
+              : "No receipts were extracted. Please ensure your files are valid receipts.";
+            onError(new Error(errorMsg));
+          } else if (results.length === 0 && !allFailed) {
+            // Some files might still be processing, wait a bit more
+            console.warn(`[Scanner] No results yet but not all failed. Waiting...`);
+          }
+          return prev;
+        });
+      }, 500); // Wait 500ms for state to update
     }
   }
 

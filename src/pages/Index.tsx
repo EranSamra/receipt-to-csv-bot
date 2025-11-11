@@ -217,38 +217,39 @@ const Index = () => {
     }
 
     // Create blob URLs for receipt images and map them to invoice numbers
-    // CRITICAL: Create blob URLs immediately and store them before scanner closes
-    // This ensures they persist even if selectedFiles changes or scanner unmounts
+    // IMPORTANT: We reuse the blob URLs from MeshReceiptScanner instead of creating new ones
+    // This prevents memory leaks and duplicate blob URLs
     const imagesMap = new Map<string, string>();
-    
-    // Create blob URLs for ALL files immediately to ensure they persist
-    // Store them in a map that won't be affected by scanner cleanup
-    const fileBlobUrls = new Map<number, string>();
-    selectedFiles.forEach((file, index) => {
-      // Create blob URL immediately - these will persist even after scanner closes
-      fileBlobUrls.set(index, URL.createObjectURL(file));
-    });
     
     // Map receipts to files: process all receipts and assign them to files
     // Since MeshReceiptScanner processes files sequentially and returns results in order,
     // we match receipts to files by index (one receipt per file, or multiple receipts from same file)
+    // We'll create blob URLs only when needed, and reuse them for multiple receipts from same file
+    const fileBlobUrls = new Map<number, string>();
     let fileIndex = 0;
     
     for (let receiptIndex = 0; receiptIndex < allResults.length; receiptIndex++) {
       const receipt = allResults[receiptIndex];
       const invoiceNumber = receipt["Invoice Number"] || '';
       
-      // Get blob URL for current file (or reuse if we've run out of files)
+      // Get or create blob URL for current file
       let blobUrl: string;
-      if (fileIndex < fileBlobUrls.size) {
+      if (!fileBlobUrls.has(fileIndex) && fileIndex < selectedFiles.length) {
+        // Create blob URL only when needed
+        blobUrl = URL.createObjectURL(selectedFiles[fileIndex]);
+        fileBlobUrls.set(fileIndex, blobUrl);
+        console.log(`[Index] Created blob URL for file ${fileIndex}: ${selectedFiles[fileIndex].name}`);
+      } else if (fileIndex < fileBlobUrls.size) {
         blobUrl = fileBlobUrls.get(fileIndex)!;
-        // Move to next file after using this one (assumes one receipt per file)
-        // If a file produces multiple receipts, they'll reuse the same blob URL
-        fileIndex++;
       } else {
         // More receipts than files - reuse last file's blob URL
-        // This handles cases where a single file produces multiple receipts
-        blobUrl = fileBlobUrls.get(fileBlobUrls.size - 1)!;
+        const lastIndex = Math.min(fileIndex, selectedFiles.length - 1);
+        if (!fileBlobUrls.has(lastIndex) && lastIndex >= 0) {
+          blobUrl = URL.createObjectURL(selectedFiles[lastIndex]);
+          fileBlobUrls.set(lastIndex, blobUrl);
+        } else {
+          blobUrl = fileBlobUrls.get(lastIndex) || fileBlobUrls.get(fileBlobUrls.size - 1)!;
+        }
       }
       
       // Map this receipt to the blob URL
@@ -258,9 +259,13 @@ const Index = () => {
         // Use index-based key if no invoice number
         imagesMap.set(`receipt-${receiptIndex}`, blobUrl);
       }
+      
+      // Move to next file after using this one (assumes one receipt per file)
+      // If a file produces multiple receipts, they'll reuse the same blob URL
+      fileIndex++;
     }
     
-    console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} files for ${allResults.length} receipts`);
+    console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} blob URLs for ${allResults.length} receipts`);
 
     // IMPORTANT: Set results and images BEFORE closing scanner to prevent cleanup issues
     console.log(`[Index] Setting ${allResults.length} results, ${imagesMap.size} image mappings`);
