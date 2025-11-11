@@ -33,23 +33,24 @@ function encodeBase64(buffer) {
 function jsonToCSVRow(receipt) {
   // Map fraud risk from confidence
   let fraudRisk = 'Low';
-  if (receipt.flags?.suspicious_fraud_risk?.value === true) {
+  if (receipt.flags && receipt.flags.suspicious_fraud_risk && receipt.flags.suspicious_fraud_risk.value === true) {
     const conf = receipt.flags.suspicious_fraud_risk.confidence || 0;
     if (conf >= 0.75) fraudRisk = 'High';
     else if (conf >= 0.6) fraudRisk = 'Medium';
   }
   
   // Map duplicate flag
-  const duplicate = receipt.flags?.duplicate?.value === true ? 'Yes' : 'No';
+  const duplicate = (receipt.flags && receipt.flags.duplicate && receipt.flags.duplicate.value === true) ? 'Yes' : 'No';
   
   // Map alcohol/tobacco from unauthorized_category
-  const alcoholTobacco = receipt.flags?.unauthorized_category?.value === true && 
-    receipt.flags?.unauthorized_category?.categories?.some(cat => 
+  const alcoholTobacco = (receipt.flags && receipt.flags.unauthorized_category && receipt.flags.unauthorized_category.value === true && 
+    receipt.flags.unauthorized_category.categories && 
+    receipt.flags.unauthorized_category.categories.some(cat => 
       cat === 'Alcohol' || cat === 'Tobacco'
-    ) ? 'Yes' : 'No';
+    )) ? 'Yes' : 'No';
   
   // Map personal expense
-  const personalExpense = receipt.flags?.suspicious_personal?.value === true ? 
+  const personalExpense = (receipt.flags && receipt.flags.suspicious_personal && receipt.flags.suspicious_personal.value === true) ? 
     'Suspicious Personal' : 'No';
   
   // Extract invoice number from receipt (extracted from document, not generated)
@@ -326,7 +327,7 @@ If OCR is low confidence, leave unreadable fields empty`
         }
 
         const data = await response.json();
-        const fullContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const fullContent = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
         
         // Parse JSON response
         let jsonReceipts = [];
@@ -470,7 +471,7 @@ If OCR is low confidence, leave unreadable fields empty`
               const invoiceNum = cleanValue(values[0]);
               
               // Find line items for this invoice number
-              const rowLineItems = result.lineItems?.filter(li => li.invoiceNumber === invoiceNum) || [];
+              const rowLineItems = (result.lineItems && Array.isArray(result.lineItems)) ? result.lineItems.filter(li => li.invoiceNumber === invoiceNum) : [];
               
               // Store line items in map
               if (invoiceNum && rowLineItems.length > 0) {
