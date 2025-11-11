@@ -197,10 +197,14 @@ export default function MeshReceiptScanner({
             );
           }
         } else {
-          console.error(`[Scanner] File ${i + 1} (${currentItem.file.name}) extraction failed: ok=${res.ok}, hasData=${!!res.data}`);
+          const errorMsg = res.error || (res.ok === false ? "Extraction failed" : "No data returned");
+          console.error(`[Scanner] File ${i + 1} (${currentItem.file.name}) extraction failed: ok=${res.ok}, hasData=${!!res.data}, error: ${errorMsg}`);
+          if (res.errorDetails) {
+            console.error(`[Scanner] Error details:`, res.errorDetails);
+          }
           setItems((prev) =>
             prev.map((it) =>
-              it.id === currentItem.id ? { ...it, status: "error", error: "Failed to extract" } : it
+              it.id === currentItem.id ? { ...it, status: "error", error: errorMsg } : it
             )
           );
         }
@@ -212,6 +216,15 @@ export default function MeshReceiptScanner({
         
         const errorObj = error instanceof Error ? error : new Error(error?.message || "Failed to extract receipt");
         const errorMessage = errorObj.message || (isPDF ? "PDF processing failed" : "Failed to extract receipt");
+        
+        // Log full error for debugging
+        console.error(`[Scanner] Full error object:`, {
+          name: error?.name,
+          message: error?.message,
+          cause: error?.cause,
+          stack: error?.stack?.substring(0, 1000)
+        });
+        
         setItems((prev) =>
           prev.map((it) =>
             it.id === currentItem.id ? { ...it, status: "error", error: errorMessage } : it

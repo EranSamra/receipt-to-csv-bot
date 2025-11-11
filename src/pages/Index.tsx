@@ -193,7 +193,18 @@ const Index = () => {
     } catch (error: any) {
       console.error(`[Index] extractReceiptFn: Error extracting receipt ${file.name}:`, error);
       console.error(`[Index] extractReceiptFn: Error name: ${error.name}, message: ${error.message}, stack: ${error.stack?.substring(0, 500)}`);
-      return { ok: false };
+      
+      // Return error details so we can display them
+      const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+      return { 
+        ok: false, 
+        error: errorMessage,
+        errorDetails: {
+          name: error?.name,
+          message: errorMessage,
+          stack: error?.stack?.substring(0, 500)
+        }
+      };
     }
   };
 
