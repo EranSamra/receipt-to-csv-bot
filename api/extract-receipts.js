@@ -7,7 +7,7 @@ function encodeBase64(buffer) {
 function jsonToCSVRow(receipt, receiptIdMap = {}) {
   // Map fraud risk from confidence - support both suspicious_fraude and suspicious_fraud_risk for backward compatibility
   let fraudRisk = 'Low';
-  const fraudFlag = receipt.flags?.suspicious_fraude || receipt.flags?.suspicious_fraud_risk;
+  const fraudFlag = (receipt.flags && receipt.flags.suspicious_fraude) || (receipt.flags && receipt.flags.suspicious_fraud_risk);
   if (fraudFlag && fraudFlag.value === true) {
     const conf = fraudFlag.confidence || 0;
     if (conf >= 0.75) fraudRisk = 'High';
