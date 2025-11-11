@@ -282,11 +282,45 @@ If OCR is low confidence, leave unreadable fields empty`
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Gemini API error:', response.status, errorText);
+          let errorMessage = 'Failed to process with AI';
+          
+          try {
+            // Read response as text first (we can only read once)
+            const errorText = await response.text();
+            
+            // Filter out prompt text - if it contains the prompt signature, it's likely not a real error message
+            if (errorText.length > 5000 || errorText.includes('SYSTEM: You are a deterministic') || errorText.includes('OUTPUT SCHEMA:')) {
+              console.error('Gemini API error:', response.status, 'Response appears to contain prompt, not error message');
+              errorMessage = `API error (status ${response.status}). Please check API key and quota.`;
+            } else {
+              // Try to parse as JSON (Gemini API usually returns JSON errors)
+              try {
+                const errorData = JSON.parse(errorText);
+                // Extract meaningful error message from Gemini API response
+                if (errorData.error?.message) {
+                  errorMessage = errorData.error.message;
+                } else if (errorData.error?.details?.[0]?.message) {
+                  errorMessage = errorData.error.details[0].message;
+                } else if (typeof errorData.error === 'string') {
+                  errorMessage = errorData.error;
+                } else if (errorData.message) {
+                  errorMessage = errorData.message;
+                }
+                console.error('Gemini API error:', response.status, JSON.stringify(errorData, null, 2));
+              } catch (jsonError) {
+                // Not JSON, use text (but truncate if too long)
+                console.error('Gemini API error (text):', response.status, errorText.substring(0, 500));
+                errorMessage = errorText.substring(0, 200);
+              }
+            }
+          } catch (readError) {
+            console.error('Gemini API error:', response.status, 'Could not read error response:', readError);
+            errorMessage = `API error (status ${response.status}). Please check API key and quota.`;
+          }
+          
           results.push({
             filename: file.originalname,
-            error: 'Failed to process with AI'
+            error: errorMessage
           });
           continue;
         }
