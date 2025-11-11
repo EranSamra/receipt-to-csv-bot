@@ -206,18 +206,21 @@ export default function MeshReceiptScanner({
         }
       } catch (error: any) {
         const elapsed = performance.now() - startTime;
-        console.error(`[Scanner] Error processing file ${i + 1}/${currentItems.length} after ${Math.round(elapsed)}ms:`, error);
+        const isPDF = currentItem.file.type === 'application/pdf' || currentItem.file.name.toLowerCase().endsWith('.pdf');
+        console.error(`[Scanner] Error processing file ${i + 1}/${currentItems.length} (${isPDF ? 'PDF' : 'Image'}) after ${Math.round(elapsed)}ms:`, error);
+        console.error(`[Scanner] Error details - name: ${error.name}, message: ${error.message}, stack: ${error.stack?.substring(0, 500)}`);
         
         const errorObj = error instanceof Error ? error : new Error(error?.message || "Failed to extract receipt");
+        const errorMessage = errorObj.message || (isPDF ? "PDF processing failed" : "Failed to extract receipt");
         setItems((prev) =>
           prev.map((it) =>
-            it.id === currentItem.id ? { ...it, status: "error", error: errorObj.message || "Failed" } : it
+            it.id === currentItem.id ? { ...it, status: "error", error: errorMessage } : it
           )
         );
         
         // Don't call onError for individual file failures, only log
         // onError will be called at the end if all files fail
-        console.warn(`[Scanner] File ${i + 1} failed, continuing with remaining files...`);
+        console.warn(`[Scanner] File ${i + 1} (${currentItem.file.name}) failed, continuing with remaining files...`);
       }
     }
 

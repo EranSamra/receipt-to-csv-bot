@@ -168,6 +168,7 @@ export default async function handler(req, res) {
         console.log(`Successfully encoded ${file.filename} (${isPDF ? 'PDF' : 'Image'}), base64 length: ${base64.length} chars`);
         
         // Call Gemini API
+        console.log(`Calling Gemini API for ${file.filename} (${isPDF ? 'PDF' : 'Image'}), mimetype: ${file.mimetype}`);
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -324,7 +325,7 @@ If merchant appears as a domain or email, normalize to brand when obvious and ad
 
 If OCR is low confidence, leave unreadable fields empty` 
                   },
-                  { inline_data: { mime_type: file.mimetype, data: base64 } }
+                  { inline_data: { mime_type: file.mimetype || 'application/pdf', data: base64 } }
                 ]
               }],
             generationConfig: {
@@ -333,6 +334,8 @@ If OCR is low confidence, leave unreadable fields empty`
             }
           })
         });
+        
+        console.log(`Gemini API request sent for ${file.filename}, waiting for response...`);
 
         if (!response.ok) {
           let errorMessage = 'Failed to process with AI';

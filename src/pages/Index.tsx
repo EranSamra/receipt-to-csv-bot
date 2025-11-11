@@ -130,18 +130,27 @@ const Index = () => {
 
   // Extract receipt function for MeshReceiptScanner
   const extractReceiptFn = async (file: File): Promise<{ ok: boolean; data?: any }> => {
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    console.log(`[Index] extractReceiptFn: Starting extraction for ${file.name}, type: ${file.type}, size: ${file.size} bytes, isPDF: ${isPDF}`);
+    
     try {
       const formData = new FormData();
       formData.append('files', file);
+      console.log(`[Index] extractReceiptFn: Added file to FormData: ${file.name}, type: ${file.type}`);
 
       // Environment-based API URL
       const API_URL = import.meta.env.DEV 
         ? 'http://localhost:3001/api/extract-receipts'
         : '/api/extract-receipts';
 
+      console.log(`[Index] extractReceiptFn: Sending request to ${API_URL}`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for PDFs
+      const timeoutId = setTimeout(() => {
+        console.error(`[Index] extractReceiptFn: Timeout after 3 minutes for ${file.name}`);
+        controller.abort();
+      }, 180000); // 3 minutes for PDFs
 
+      const startTime = performance.now();
       const response = await fetch(API_URL, {
         method: 'POST',
         body: formData,
@@ -152,14 +161,20 @@ const Index = () => {
       });
 
       clearTimeout(timeoutId);
+      const elapsed = performance.now() - startTime;
+      console.log(`[Index] extractReceiptFn: Received response for ${file.name} after ${Math.round(elapsed)}ms, status: ${response.status}`);
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`[Index] extractReceiptFn: Server error ${response.status} for ${file.name}:`, errorText.substring(0, 500));
+        throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 200)}`);
       }
 
       const data = await response.json();
+      console.log(`[Index] extractReceiptFn: Parsed JSON response for ${file.name}, has CSV: ${!!data.csv}, has lineItems: ${!!data.lineItems}`);
       
       if (!data || !data.csv || typeof data.csv !== 'string') {
+        console.error(`[Index] extractReceiptFn: Invalid response format for ${file.name}:`, data);
         throw new Error('Invalid response format from server');
       }
 
@@ -169,14 +184,15 @@ const Index = () => {
       console.log(`[Index] extractReceiptFn: Parsed ${parsedResults.length} receipt(s) from file ${file.name}`);
       
       if (parsedResults.length === 0) {
-        console.warn(`[Index] WARNING: File ${file.name} produced 0 receipts after parsing CSV`);
+        console.warn(`[Index] WARNING: File ${file.name} produced 0 receipts after parsing CSV. CSV content:`, data.csv.substring(0, 500));
         throw new Error('No valid receipt data extracted');
       }
 
       // Return all parsed results (a single file can produce multiple receipts)
       return { ok: true, data: parsedResults };
     } catch (error: any) {
-      console.error('Error extracting receipt:', error);
+      console.error(`[Index] extractReceiptFn: Error extracting receipt ${file.name}:`, error);
+      console.error(`[Index] extractReceiptFn: Error name: ${error.name}, message: ${error.message}, stack: ${error.stack?.substring(0, 500)}`);
       return { ok: false };
     }
   };
