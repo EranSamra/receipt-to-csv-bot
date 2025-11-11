@@ -347,9 +347,9 @@ If OCR is low confidence, leave unreadable fields empty`
               try {
                 const errorData = JSON.parse(errorText);
                 // Extract meaningful error message from Gemini API response
-                if (errorData.error?.message) {
+                if (errorData.error && errorData.error.message) {
                   errorMessage = errorData.error.message;
-                } else if (errorData.error?.details?.[0]?.message) {
+                } else if (errorData.error && errorData.error.details && errorData.error.details[0] && errorData.error.details[0].message) {
                   errorMessage = errorData.error.details[0].message;
                 } else if (typeof errorData.error === 'string') {
                   errorMessage = errorData.error;
