@@ -158,9 +158,9 @@ export default function MeshReceiptScanner({
 
       try {
         
-        // Add a timeout wrapper to prevent hanging (30 seconds max per file)
+        // Add a timeout wrapper to prevent hanging (60 seconds max per file - PDFs may take longer)
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Extraction timeout after 30 seconds')), 30000);
+          setTimeout(() => reject(new Error('Extraction timeout after 60 seconds')), 60000);
         });
         
         // Use the captured file reference, not from state

@@ -140,7 +140,7 @@ const Index = () => {
         : '/api/extract-receipts';
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes for PDFs
 
       const response = await fetch(API_URL, {
         method: 'POST',
@@ -362,7 +362,7 @@ const Index = () => {
         controller.abort();
         clearInterval(progressInterval);
         setProcessingProgress(0);
-      }, 120000); // 2 minute timeout
+      }, 180000); // 3 minute timeout (PDFs may take longer)
 
       let response;
       try {

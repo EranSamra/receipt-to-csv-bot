@@ -150,21 +150,22 @@ export default async function handler(req, res) {
     
     for (const file of files) {
       try {
-        console.log(`Processing file: ${file.filename}, size: ${file.data.length} bytes`);
+        const isPDF = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.filename);
+        console.log(`Processing file: ${file.filename}, type: ${file.mimetype}, size: ${file.data.length} bytes, isPDF: ${isPDF}`);
         
-        // Check file size limit (1MB max)
-        if (file.data.length > 1024 * 1024) {
+        // Check file size limit (5MB max - PDFs can be larger)
+        if (file.data.length > 5 * 1024 * 1024) {
           console.error(`File ${file.filename} is too large: ${file.data.length} bytes`);
           results.push({
             filename: file.filename,
-            error: 'File too large. Maximum size is 1MB.'
+            error: 'File too large. Maximum size is 5MB.'
           });
           continue;
         }
         
         // Convert to base64
         const base64 = encodeBase64(file.data);
-        console.log(`Successfully encoded ${file.filename}`);
+        console.log(`Successfully encoded ${file.filename} (${isPDF ? 'PDF' : 'Image'}), base64 length: ${base64.length} chars`);
         
         // Call Gemini API
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
