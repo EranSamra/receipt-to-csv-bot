@@ -158,9 +158,9 @@ export default function MeshReceiptScanner({
 
       try {
         
-        // Add a timeout wrapper to prevent hanging (60 seconds max per file - PDFs may take longer)
+        // Add a timeout wrapper to prevent hanging (30 seconds max per file)
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Extraction timeout after 60 seconds')), 60000);
+          setTimeout(() => reject(new Error('Extraction timeout after 30 seconds')), 30000);
         });
         
         // Use the captured file reference, not from state
@@ -197,43 +197,27 @@ export default function MeshReceiptScanner({
             );
           }
         } else {
-          const errorMsg = res.error || (res.ok === false ? "Extraction failed" : "No data returned");
-          console.error(`[Scanner] File ${i + 1} (${currentItem.file.name}) extraction failed: ok=${res.ok}, hasData=${!!res.data}, error: ${errorMsg}`);
-          if (res.errorDetails) {
-            console.error(`[Scanner] Error details:`, res.errorDetails);
-          }
+          console.error(`[Scanner] File ${i + 1} (${currentItem.file.name}) extraction failed: ok=${res.ok}, hasData=${!!res.data}`);
           setItems((prev) =>
             prev.map((it) =>
-              it.id === currentItem.id ? { ...it, status: "error", error: errorMsg } : it
+              it.id === currentItem.id ? { ...it, status: "error", error: "Failed to extract" } : it
             )
           );
         }
       } catch (error: any) {
         const elapsed = performance.now() - startTime;
-        const isPDF = currentItem.file.type === 'application/pdf' || currentItem.file.name.toLowerCase().endsWith('.pdf');
-        console.error(`[Scanner] Error processing file ${i + 1}/${currentItems.length} (${isPDF ? 'PDF' : 'Image'}) after ${Math.round(elapsed)}ms:`, error);
-        console.error(`[Scanner] Error details - name: ${error.name}, message: ${error.message}, stack: ${error.stack?.substring(0, 500)}`);
+        console.error(`[Scanner] Error processing file ${i + 1}/${currentItems.length} after ${Math.round(elapsed)}ms:`, error);
         
         const errorObj = error instanceof Error ? error : new Error(error?.message || "Failed to extract receipt");
-        const errorMessage = errorObj.message || (isPDF ? "PDF processing failed" : "Failed to extract receipt");
-        
-        // Log full error for debugging
-        console.error(`[Scanner] Full error object:`, {
-          name: error?.name,
-          message: error?.message,
-          cause: error?.cause,
-          stack: error?.stack?.substring(0, 1000)
-        });
-        
         setItems((prev) =>
           prev.map((it) =>
-            it.id === currentItem.id ? { ...it, status: "error", error: errorMessage } : it
+            it.id === currentItem.id ? { ...it, status: "error", error: errorObj.message || "Failed" } : it
           )
         );
         
         // Don't call onError for individual file failures, only log
         // onError will be called at the end if all files fail
-        console.warn(`[Scanner] File ${i + 1} (${currentItem.file.name}) failed, continuing with remaining files...`);
+        console.warn(`[Scanner] File ${i + 1} failed, continuing with remaining files...`);
       }
     }
 
@@ -244,40 +228,19 @@ export default function MeshReceiptScanner({
     // Log summary - note: items state might be stale, so we log what we know from processing
     console.log(`[Scanner] Successfully extracted receipts from ${results.length > 0 ? 'some' : 'no'} files`);
     
-    // Count successful vs failed files
-    const successfulFiles = currentItems.filter((item, idx) => {
-      // Check if this file produced results
-      // Since we process sequentially, we can check by index
-      return results.length > idx || results.some(r => r !== null && r !== undefined);
-    }).length;
-    
-    console.log(`[Scanner] Summary: ${successfulFiles}/${currentItems.length} files produced results, ${results.length} total receipts extracted`);
-    
     if (results.length > 0) {
       console.log(`[Scanner] Calling onScanComplete with ${results.length} receipts`);
       onScanComplete(results);
     } else {
-      // Check if any items have errors - but wait for state to update
-      setTimeout(() => {
-        setItems((prev) => {
-          const hasErrors = prev.some(i => i.status === "error");
-          const allFailed = prev.every(i => i.status === "error" || i.status === "queued");
-          
-          console.log(`[Scanner] Error check: hasErrors=${hasErrors}, allFailed=${allFailed}, results.length=${results.length}`);
-          
-          if (allFailed && results.length === 0 && onError) {
-            console.error(`[Scanner] All files failed. Calling onError`);
-            const errorMsg = hasErrors 
-              ? "All receipts failed to extract. Please check the console for details."
-              : "No receipts were extracted. Please ensure your files are valid receipts.";
-            onError(new Error(errorMsg));
-          } else if (results.length === 0 && !allFailed) {
-            // Some files might still be processing, wait a bit more
-            console.warn(`[Scanner] No results yet but not all failed. Waiting...`);
-          }
-          return prev;
-        });
-      }, 500); // Wait 500ms for state to update
+      // Check if any items have errors
+      setItems((prev) => {
+        const hasErrors = prev.some(i => i.status === "error");
+        if (hasErrors && results.length === 0 && onError) {
+          console.error(`[Scanner] All files failed. Calling onError`);
+          onError(new Error("All receipts failed to extract"));
+        }
+        return prev;
+      });
     }
   }
 

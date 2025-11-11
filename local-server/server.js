@@ -31,27 +31,25 @@ function encodeBase64(buffer) {
 
 // Helper function to convert JSON receipt to CSV row
 function jsonToCSVRow(receipt) {
-  // Map fraud risk from confidence - support both suspicious_fraude and suspicious_fraud_risk for backward compatibility
+  // Map fraud risk from confidence
   let fraudRisk = 'Low';
-  const fraudFlag = (receipt.flags && receipt.flags.suspicious_fraude) || (receipt.flags && receipt.flags.suspicious_fraud_risk);
-  if (fraudFlag && fraudFlag.value === true) {
-    const conf = fraudFlag.confidence || 0;
+  if (receipt.flags?.suspicious_fraud_risk?.value === true) {
+    const conf = receipt.flags.suspicious_fraud_risk.confidence || 0;
     if (conf >= 0.75) fraudRisk = 'High';
     else if (conf >= 0.6) fraudRisk = 'Medium';
   }
   
   // Map duplicate flag
-  const duplicate = (receipt.flags && receipt.flags.duplicate && receipt.flags.duplicate.value === true) ? 'Yes' : 'No';
+  const duplicate = receipt.flags?.duplicate?.value === true ? 'Yes' : 'No';
   
   // Map alcohol/tobacco from unauthorized_category
-  const alcoholTobacco = (receipt.flags && receipt.flags.unauthorized_category && receipt.flags.unauthorized_category.value === true && 
-    receipt.flags.unauthorized_category.categories && 
-    receipt.flags.unauthorized_category.categories.some(cat => 
+  const alcoholTobacco = receipt.flags?.unauthorized_category?.value === true && 
+    receipt.flags?.unauthorized_category?.categories?.some(cat => 
       cat === 'Alcohol' || cat === 'Tobacco'
-    )) ? 'Yes' : 'No';
+    ) ? 'Yes' : 'No';
   
   // Map personal expense
-  const personalExpense = (receipt.flags && receipt.flags.suspicious_personal && receipt.flags.suspicious_personal.value === true) ? 
+  const personalExpense = receipt.flags?.suspicious_personal?.value === true ? 
     'Suspicious Personal' : 'No';
   
   // Extract invoice number from receipt (extracted from document, not generated)
@@ -100,22 +98,21 @@ app.post('/api/extract-receipts', (req, res, next) => {
     
     for (const file of files) {
       try {
-        const isPDF = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname);
-        console.log(`Processing file: ${file.originalname}, type: ${file.mimetype}, size: ${file.size} bytes, isPDF: ${isPDF}`);
+        console.log(`Processing file: ${file.originalname}, size: ${file.size} bytes`);
         
-        // Check file size limit (5MB max - PDFs can be larger)
-        if (file.size > 5 * 1024 * 1024) {
+        // Check file size limit (1MB max)
+        if (file.size > 1024 * 1024) {
           console.error(`File ${file.originalname} is too large: ${file.size} bytes`);
           results.push({
             filename: file.originalname,
-            error: 'File too large. Maximum size is 5MB.'
+            error: 'File too large. Maximum size is 1MB.'
           });
           continue;
         }
         
         // Convert to base64
         const base64 = encodeBase64(file.buffer);
-        console.log(`Successfully encoded ${file.originalname} (${isPDF ? 'PDF' : 'Image'}), base64 length: ${base64.length} chars`);
+        console.log(`Successfully encoded ${file.originalname}`);
         
         // Call Gemini API with new JSON-based prompt
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
@@ -125,86 +122,173 @@ app.post('/api/extract-receipts', (req, res, next) => {
             contents: [{
               parts: [
                 { 
-                  text: `SYSTEM: You are a deterministic receipt extraction and classification engine for enterprise expense management. You must extract fields, classify receipts for fraud and policy violations, and return a single structured JSON object per receipt. Be conservative when deciding to flag. Provide evidence for every non-empty flag. Return JSON only. Do not include commentary or extra text.
+                  text: `SYSTEM: You are a deterministic receipt extraction and policy classification engine for enterprise expense management. Extract fields, classify fraud and policy risks, then return a single JSON array of receipt objects. Be conservative when flagging. Provide evidence for every non-empty flag. Return JSON only, no extra text.
+
+TASK: Extract and classify the following receipt image or OCR text. Follow the schema and rules exactly.
+
+STRICT OUTPUT CONTRACT:
+
+Return a single top-level JSON array
+
+Each element must match the schema exactly, no extra keys
+
+Use a decimal point for numbers
+
+Dates are YYYY-MM-DD
+
+If a field is unknown, use an empty string for strings or null where allowed
+
+Never fabricate invoice_number
 
 OUTPUT SCHEMA:
 
-Return a JSON array where each element is an object with exactly these keys:
+Each array element is an object with exactly these keys and order:
 
-receipt_id: string (unique id provided by caller or generated from file name and timestamp)
-date: string (YYYY-MM-DD or empty)
-amount: number (final paid amount, positive for charges, negative for refunds)
-currency: string (ISO 4217 uppercase or empty)
-merchant: string (normalized merchant name)
-transaction_type: string (one of: Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other)
+receipt_id: string, generate as "${file.originalname}-${Date.now()}"
+
+invoice_number: string, from the document only, never invent, empty if none
+
+date: string, YYYY-MM-DD or empty
+
+amount: number, final paid amount, negative for refunds
+
+currency: string, ISO 4217 uppercase or empty
+
+merchant: string, normalized brand name
+
+transaction_type: string, one of Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other
 
 flags: object with keys:
-  suspicious_fraude: { value: true|false, confidence: 0-1, evidence: [strings] }
-  duplicate: { value: true|false, confidence: 0-1, evidence: [strings], duplicate_of: receipt_id|null }
-  unauthorized_category: { value: true|false, confidence: 0-1, categories: [strings], evidence: [strings] } // categories: Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other
-  suspicious_personal: { value: true|false, confidence: 0-1, evidence: [strings], vendor_match: [strings] } // vendor_match: list of matched personal-brand tokens
 
-confidence_overall: number (0-1)
-notes: string (short machine readable summary if needed)
+suspicious_fraud_risk: { value: true|false, confidence: 0-1, evidence: [strings] }
+
+duplicate: { value: true|false, confidence: 0-1, evidence: [strings], duplicate_of: receipt_id|null }
+
+unauthorized_category: { value: true|false, confidence: 0-1, categories: [strings], evidence: [strings] } // allowed categories: Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other
+
+suspicious_personal: { value: true|false, confidence: 0-1, evidence: [strings], vendor_match: [strings] }
+
+confidence_overall: number, 0-1
+
+notes: string, short machine readable note if needed
+
+line_items: array optional, include only if the document contains multiple distinct items
+
+Each item: { description: string, date: string YYYY-MM-DD or empty, amount: number, category: "Food"|"Beverage"|"Alcohol"|"Tobacco"|"Service"|"Tax"|"Tip"|"Other" }
 
 PRIMARY EXTRACTION RULES:
 
-Date: Use payment/settlement date if available. Normalize to YYYY-MM-DD. If only month-year, use first day of month.
-Amount: Use final "Total" amount. Strip symbols and thousand separators. Keep decimal point. Negative for refunds.
-Currency: Map symbol to ISO code when possible. Leave empty if unknown.
-Merchant: Normalize by removing legal suffixes like Inc, Ltd, LLC, GmbH. Prefer brand name on top of receipt.
+CRITICAL: Always extract at least one receipt object from every image, even if merchant, date, or invoice_number are missing. Missing fields should be empty strings, never cause rejection. A receipt with only amount and line items is still valid.
+
+Date: prefer payment or settlement date, if only month and year, use first day of that month, normalize to YYYY-MM-DD. If no date visible, use empty string.
+
+Amount: use the final Total or Amount paid, do not recompute when a final total exists, strip symbols and thousands separators
+
+Currency: map symbol to ISO code when clear, otherwise empty
+
+Merchant: remove legal suffixes such as Inc, Ltd, LLC, GmbH, prefer the visible brand. If no merchant name visible, use empty string.
+
+Transaction type: if a card brand or last 4 appears, set Card, for refunds, set Refund and make the amount negative. If unclear, use "Other"
 
 FLAGGING RULES:
 
-suspicious_fraude: flag as true when one or more of the following conditions are met with supporting evidence:
-- Visual/metadata anomalies: Image metadata missing or clearly generated (no camera EXIF), pixel patterns typical of image synthesis, OCR text inconsistent with typical receipt layouts, font mismatches, receipt image contains obvious artifacts of compositing
-- Content anomalies: Order numbers/invoice numbers/tax IDs that do not match known formats, totals that do not match item sums, merchant name not found in business directories
-- Behavioral anomalies: Extremely short upload-to-extract time with exact synthetic-like pixels
-Evidence examples: "no-exif", "synthetic-font-pattern", "impossible-invoice-format", "mismatch-total-lines"
-Require combined confidence >= 0.6 to mark as true.
+suspicious_fraud_risk:
 
-duplicate: flag as true if any of:
-- Exact image hash match (evidence: "image-hash-match")
-- Perceptual hash near-match within threshold (evidence: "phash-similarity:X")
-- OCR text similarity above threshold for merchant+date+amount (evidence: "ocr-similarity:XX%")
-- Same merchant + same amount + same date within 1 day and near-identical payment instrument last4 (evidence: "merchant-amount-date-match")
-Include duplicate_of with the matched receipt id.
+Set value true when combined confidence >= 0.6 with evidence. Otherwise false, but include any evidence found
 
-unauthorized_category: flag as true for forbidden categories (Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other)
-Use merchant name, line items, and OCR keywords to detect categories.
-Keyword examples:
-- Alcohol: wine, beer, liquor, bar, brew, vintner, cellar, vinos, vinoteca
-- Tobacco: cigarette, cigar, tobacco, vape, vape shop
-- Gambling: casino, sportsbook, bet, wager, slot, poker
-- Adult: onlyfans, porn, xxx, camming
-If multiple categories detected, list all.
+Visual or metadata anomalies: no-exif, screenshot-metadata, generator-tag, layered-artifacts, cloned-patches, vector-font-pattern, uniform-kerning
 
-suspicious_personal: flag as true when merchant or line items indicate clear personal spend
-Vendor whitelist examples: OnlyFans, Zara, H&M, Victoria's Secret, Sephora, Netflix, Spotify, Apple Store (personal electronics may be allowed per policy)
-Match heuristics:
-- Exact vendor token match in merchant or OCR text -> high confidence
-- Merchant appears in known personal brand list -> high confidence
-- If line items include clothing, cosmetics, subscription services and merchant is general retailer -> lower confidence
-Evidence examples: "vendor-token:OnlyFans", "line-item:subscription", "merchant-domain:onlyfans.com"
+Content anomalies: impossible-invoice-format, invalid-tax-id, currency-mismatch, impossible-total, merchant-not-found, domain-mismatch:merchant/domain, phone-format-invalid
+
+Consistency anomalies: mismatch-total-lines, duplicated-line-items, subtotal-tax-mismatch without a valid discount or service line
+
+Behavioral indicators in a single file or batch: repeated-layout-pattern, multiple-receipts-perfectly-uniform
+
+duplicate:
+
+Scope is within the same image or batch only
+
+Set value true when any apply, include duplicate_of when available
+
+image-hash-match, exact duplicate in image or batch
+
+phash-similarity:X, perceptual near duplicate, Hamming distance threshold for near match
+
+ocr-similarity:XX, normalized similarity for merchant+date+amount above 95 percent
+
+merchant-amount-date-match, same merchant, amount, date within 1 day and near-identical card last4
+
+same-invoice-number, the same invoice_number appears again in the same image or batch
+
+If only one receipt is processed in this call, set duplicate.value false
+
+unauthorized_category:
+
+Set value true when merchant or line items indicate forbidden categories
+
+Keyword anchors
+
+Alcohol: wine, beer, liquor, bar, brewery, pub, spirits, vodka, gin, rum, whiskey, whisky, tequila, bourbon, scotch, brandy, cognac, champagne, prosecco, sake, mezcal, absinthe, liqueur, cordial, cocktail, margarita, martini, mojito, sangria
+
+Tobacco: cigarette, cigar, tobacco, vape, vaping, e-cigarette, e-cig, hookah, shisha, snuff, chewing tobacco
+
+Gambling: casino, sportsbook, bet, wager, slot, poker, roulette, blackjack, baccarat, craps, lottery, scratch card, betting, gambling
+
+Adult: onlyfans, porn, xxx, cam, adult store, strip club, adult entertainment, escort
+
+Pharmaceuticals: pharmacy, prescription, rx, medication, drugs (when clearly non-prescription or recreational)
+
+Evidence strings must reference tokens found, for example line-item:beer, line-item:vodka, line-item:whiskey, merchant-token:pub, vendor-token:OnlyFans
+
+suspicious_personal:
+
+Recognize clear personal spend, including brands like OnlyFans, Zara, H&M, Victoria's Secret, Sephora, Shein, Temu, Netflix, Spotify, Apple App Store, Google Play, Uber Eats, Deliveroo, DoorDash, Steam, Epic Games
+
+Heuristics
+
+Exact vendor token in merchant, domain, or receipt header, high confidence
+
+Line items strongly personal without business context, medium confidence
+
+Generic marketplaces require item evidence, lower confidence
+
+Evidence examples: vendor-token:Zara, merchant-domain:onlyfans.com, line-item:subscription, line-item:cosmetics
 
 EVIDENCE FORMAT:
-Every evidence entry must be a short token or phrase using hyphen separated words, for example:
-- "no-exif"
-- "image-hash-match"
-- "phash-similarity:4"
-- "ocr-similarity:97"
-- "vendor-token:OnlyFans"
-- "line-item:beer"
-- "domain-mismatch:merchant/domain"
-- "impossible-total"
+
+Short tokens or token:value pairs only
+
+Examples: no-exif, image-hash-match, phash-similarity:4, ocr-similarity:97, vendor-token:OnlyFans, line-item:beer, domain-mismatch:merchant/domain, impossible-total, phone-format-invalid, invalid-tax-id:GB
 
 ACTIONABLE OUTPUTS:
-- If suspicious_fraude.value === true and confidence >= 0.75, include in notes: "Hold for manual review - potential AI-generated receipt"
-- If duplicate.value === true and confidence >= 0.9, include in notes: "Auto-reject duplicate" or include duplicate_of id for de-dupe pipeline
-- If unauthorized_category.value === true and categories includes Gambling or Alcohol and confidence >= 0.7, notes: "Flag for policy violation - require approver"
-- If suspicious_personal.value === true and confidence >= 0.7, notes: "Flag as personal expense"
 
-Return JSON only. Do not include explanations, code fences, or extra text.` 
+If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Hold for manual review, potential AI generated receipt"
+
+If duplicate.value true and confidence >= 0.9, notes = "Auto reject duplicate", include duplicate_of
+
+If unauthorized_category.value true and categories contains Alcohol or Gambling and confidence >= 0.7, notes = "Flag for policy violation, require approver"
+
+If suspicious_personal.value true and confidence >= 0.7, notes = "Flag as personal expense"
+
+LINE ITEM EXTRACTION:
+
+Include line_items only when multiple distinct items are present, do not add an empty array
+
+Each item must have description and amount, add category if clear
+
+ROBUSTNESS RULES:
+
+Never fabricate invoice_number. If not visible, use empty string.
+
+ALWAYS return at least one receipt object per image, even if many fields are missing. Missing merchant, date, or invoice_number should never cause an empty array response.
+
+If totals conflict, prefer the final Total or Amount paid, then add mismatch-total-lines to evidence
+
+If merchant appears as a domain or email, normalize to brand when obvious and add merchant-domain:brand.tld to evidence
+
+If OCR is low confidence, leave unreadable fields empty
+
+For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila, etc.) in line items even if merchant name doesn't indicate alcohol. Use semantic understanding - if line items contain alcohol product names, flag as Alcohol category.` 
                 },
                 { inline_data: { mime_type: file.mimetype, data: base64 } }
               ]
@@ -217,51 +301,26 @@ Return JSON only. Do not include explanations, code fences, or extra text.`
         });
 
         if (!response.ok) {
-          let errorMessage = 'Failed to process with AI';
-          
-          try {
-            // Read response as text first (we can only read once)
-            const errorText = await response.text();
-            
-            // Filter out prompt text - if it contains the prompt signature, it's likely not a real error message
-            if (errorText.length > 5000 || errorText.includes('SYSTEM: You are a deterministic') || errorText.includes('OUTPUT SCHEMA:')) {
-              console.error('Gemini API error:', response.status, 'Response appears to contain prompt, not error message');
-              errorMessage = `API error (status ${response.status}). Please check API key and quota.`;
-            } else {
-              // Try to parse as JSON (Gemini API usually returns JSON errors)
-              try {
-                const errorData = JSON.parse(errorText);
-                // Extract meaningful error message from Gemini API response
-                if (errorData.error && errorData.error.message) {
-                  errorMessage = errorData.error.message;
-                } else if (errorData.error && errorData.error.details && errorData.error.details[0] && errorData.error.details[0].message) {
-                  errorMessage = errorData.error.details[0].message;
-                } else if (typeof errorData.error === 'string') {
-                  errorMessage = errorData.error;
-                } else if (errorData.message) {
-                  errorMessage = errorData.message;
-                }
-                console.error('Gemini API error:', response.status, JSON.stringify(errorData, null, 2));
-              } catch (jsonError) {
-                // Not JSON, use text (but truncate if too long)
-                console.error('Gemini API error (text):', response.status, errorText.substring(0, 500));
-                errorMessage = errorText.substring(0, 200);
-              }
-            }
-          } catch (readError) {
-            console.error('Gemini API error:', response.status, 'Could not read error response:', readError);
-            errorMessage = `API error (status ${response.status}). Please check API key and quota.`;
-          }
-          
+          const errorText = await response.text();
+          console.error('Gemini API error:', response.status, errorText);
           results.push({
             filename: file.originalname,
-            error: errorMessage
+            error: 'Failed to process with AI'
           });
           continue;
         }
 
         const data = await response.json();
-        const fullContent = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
+        const fullContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        
+        // Log raw response for debugging
+        console.log(`📄 Raw Gemini response for ${file.originalname} (${fullContent.length} chars):`);
+        if (fullContent.length < 500) {
+          console.log(`   Full content: ${fullContent}`);
+        } else {
+          console.log(`   First 500 chars: ${fullContent.substring(0, 500)}`);
+          console.log(`   Last 200 chars: ${fullContent.substring(fullContent.length - 200)}`);
+        }
         
         // Parse JSON response
         let jsonReceipts = [];
@@ -279,9 +338,19 @@ Return JSON only. Do not include explanations, code fences, or extra text.`
           jsonReceipts = Array.isArray(parsed) ? parsed : [parsed];
           
           console.log(`✅ Parsed ${jsonReceipts.length} receipt(s) from JSON for ${file.originalname}`);
+          
+          // Validate that we got receipts
+          if (jsonReceipts.length === 0) {
+            console.error(`❌ CRITICAL: Parsed JSON but got empty array for ${file.originalname}`);
+          } else {
+            // Log receipt details for debugging
+            jsonReceipts.forEach((receipt, idx) => {
+              console.log(`   Receipt ${idx + 1}: merchant="${receipt.merchant || '(empty)'}", amount=${receipt.amount || 0}, alcohol=${receipt.flags?.unauthorized_category?.categories?.includes('Alcohol') ? 'YES' : 'NO'}`);
+            });
+          }
         } catch (parseError) {
-          console.error(`Failed to parse JSON response for ${file.originalname}:`, parseError);
-          console.error('Response content:', fullContent.substring(0, 500));
+          console.error(`❌ Failed to parse JSON response for ${file.originalname}:`, parseError.message);
+          console.error(`   Response content (first 1000 chars):`, fullContent.substring(0, 1000));
           
           // Fallback: try to extract JSON from text
           const jsonMatch = fullContent.match(/\[[\s\S]*\]/);
@@ -308,6 +377,37 @@ Return JSON only. Do not include explanations, code fences, or extra text.`
         }
         
         // Process each receipt from JSON
+        if (jsonReceipts.length === 0) {
+          console.error(`❌ ERROR: File ${file.originalname} produced 0 receipts from Gemini API`);
+          console.error(`   Full response content (first 1000 chars):`, fullContent.substring(0, 1000));
+          console.error(`   This violates the prompt requirement to ALWAYS return at least one receipt object.`);
+          
+          // FALLBACK: Create a minimal receipt object to prevent complete failure
+          // This ensures the flagging system still receives data to process
+          console.warn(`   Creating fallback receipt object with minimal data...`);
+          const fallbackReceipt = {
+            receipt_id: `${file.originalname}-${Date.now()}`,
+            invoice_number: '',
+            date: '',
+            amount: 0,
+            currency: '',
+            merchant: '',
+            transaction_type: 'Other',
+            flags: {
+              suspicious_fraud_risk: { value: false, confidence: 0, evidence: [] },
+              duplicate: { value: false, confidence: 0, evidence: [], duplicate_of: null },
+              unauthorized_category: { value: false, confidence: 0, categories: [], evidence: [] },
+              suspicious_personal: { value: false, confidence: 0, evidence: [], vendor_match: [] }
+            },
+            confidence_overall: 0,
+            notes: 'Failed to extract receipt data - Gemini returned empty array',
+            line_items: []
+          };
+          jsonReceipts = [fallbackReceipt];
+          console.warn(`   Using fallback receipt to prevent data loss`);
+        }
+        
+        // Process receipts (now guaranteed to have at least one)
         for (const receipt of jsonReceipts) {
           // Extract invoice number from receipt (must be extracted from document, not generated)
           const invoiceNumber = receipt.invoice_number || '';
@@ -405,7 +505,7 @@ Return JSON only. Do not include explanations, code fences, or extra text.`
               const invoiceNum = cleanValue(values[0]);
               
               // Find line items for this invoice number
-              const rowLineItems = (result.lineItems && Array.isArray(result.lineItems)) ? result.lineItems.filter(li => li.invoiceNumber === invoiceNum) : [];
+              const rowLineItems = result.lineItems?.filter(li => li.invoiceNumber === invoiceNum) || [];
               
               // Store line items in map
               if (invoiceNum && rowLineItems.length > 0) {

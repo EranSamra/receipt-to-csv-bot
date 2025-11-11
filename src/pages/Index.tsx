@@ -12,6 +12,7 @@ import { ParticleTextEffect } from "@/components/ui/particle-text-effect";
 import { logMobileFileInfo, logMobileFetchInfo, logMobileError, detectMobileDevice } from "@/utils/mobileDebug";
 import InvoiceScanModal from "@/components/InvoiceScanModal";
 import MeshReceiptScanner from "@/components/MeshReceiptScanner";
+import { LeadGate } from "@/components/LeadGate";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -27,7 +28,15 @@ const Index = () => {
   const [showExamplesModal, setShowExamplesModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showMeshScanner, setShowMeshScanner] = useState(false);
+  const [showLeadGate, setShowLeadGate] = useState(false);
+  const [leadCaptured, setLeadCaptured] = useState(false);
   const { toast } = useToast();
+
+  // Check if lead was already captured
+  useEffect(() => {
+    const captured = localStorage.getItem('lead_captured') === '1';
+    setLeadCaptured(captured);
+  }, []);
 
   // Trigger animations on mount
   useEffect(() => {
@@ -130,27 +139,18 @@ const Index = () => {
 
   // Extract receipt function for MeshReceiptScanner
   const extractReceiptFn = async (file: File): Promise<{ ok: boolean; data?: any }> => {
-    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    console.log(`[Index] extractReceiptFn: Starting extraction for ${file.name}, type: ${file.type}, size: ${file.size} bytes, isPDF: ${isPDF}`);
-    
     try {
       const formData = new FormData();
       formData.append('files', file);
-      console.log(`[Index] extractReceiptFn: Added file to FormData: ${file.name}, type: ${file.type}`);
 
       // Environment-based API URL
       const API_URL = import.meta.env.DEV 
         ? 'http://localhost:3001/api/extract-receipts'
         : '/api/extract-receipts';
 
-      console.log(`[Index] extractReceiptFn: Sending request to ${API_URL}`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.error(`[Index] extractReceiptFn: Timeout after 3 minutes for ${file.name}`);
-        controller.abort();
-      }, 180000); // 3 minutes for PDFs
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const startTime = performance.now();
       const response = await fetch(API_URL, {
         method: 'POST',
         body: formData,
@@ -161,20 +161,14 @@ const Index = () => {
       });
 
       clearTimeout(timeoutId);
-      const elapsed = performance.now() - startTime;
-      console.log(`[Index] extractReceiptFn: Received response for ${file.name} after ${Math.round(elapsed)}ms, status: ${response.status}`);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Index] extractReceiptFn: Server error ${response.status} for ${file.name}:`, errorText.substring(0, 500));
-        throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 200)}`);
+        throw new Error(`Server error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log(`[Index] extractReceiptFn: Parsed JSON response for ${file.name}, has CSV: ${!!data.csv}, has lineItems: ${!!data.lineItems}`);
       
       if (!data || !data.csv || typeof data.csv !== 'string') {
-        console.error(`[Index] extractReceiptFn: Invalid response format for ${file.name}:`, data);
         throw new Error('Invalid response format from server');
       }
 
@@ -184,27 +178,15 @@ const Index = () => {
       console.log(`[Index] extractReceiptFn: Parsed ${parsedResults.length} receipt(s) from file ${file.name}`);
       
       if (parsedResults.length === 0) {
-        console.warn(`[Index] WARNING: File ${file.name} produced 0 receipts after parsing CSV. CSV content:`, data.csv.substring(0, 500));
+        console.warn(`[Index] WARNING: File ${file.name} produced 0 receipts after parsing CSV`);
         throw new Error('No valid receipt data extracted');
       }
 
       // Return all parsed results (a single file can produce multiple receipts)
       return { ok: true, data: parsedResults };
     } catch (error: any) {
-      console.error(`[Index] extractReceiptFn: Error extracting receipt ${file.name}:`, error);
-      console.error(`[Index] extractReceiptFn: Error name: ${error.name}, message: ${error.message}, stack: ${error.stack?.substring(0, 500)}`);
-      
-      // Return error details so we can display them
-      const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
-      return { 
-        ok: false, 
-        error: errorMessage,
-        errorDetails: {
-          name: error?.name,
-          message: errorMessage,
-          stack: error?.stack?.substring(0, 500)
-        }
-      };
+      console.error('Error extracting receipt:', error);
+      return { ok: false };
     }
   };
 
@@ -228,39 +210,38 @@ const Index = () => {
     }
 
     // Create blob URLs for receipt images and map them to invoice numbers
-    // IMPORTANT: We reuse the blob URLs from MeshReceiptScanner instead of creating new ones
-    // This prevents memory leaks and duplicate blob URLs
+    // CRITICAL: Create blob URLs immediately and store them before scanner closes
+    // This ensures they persist even if selectedFiles changes or scanner unmounts
     const imagesMap = new Map<string, string>();
+    
+    // Create blob URLs for ALL files immediately to ensure they persist
+    // Store them in a map that won't be affected by scanner cleanup
+    const fileBlobUrls = new Map<number, string>();
+    selectedFiles.forEach((file, index) => {
+      // Create blob URL immediately - these will persist even after scanner closes
+      fileBlobUrls.set(index, URL.createObjectURL(file));
+    });
     
     // Map receipts to files: process all receipts and assign them to files
     // Since MeshReceiptScanner processes files sequentially and returns results in order,
     // we match receipts to files by index (one receipt per file, or multiple receipts from same file)
-    // We'll create blob URLs only when needed, and reuse them for multiple receipts from same file
-    const fileBlobUrls = new Map<number, string>();
     let fileIndex = 0;
     
     for (let receiptIndex = 0; receiptIndex < allResults.length; receiptIndex++) {
       const receipt = allResults[receiptIndex];
       const invoiceNumber = receipt["Invoice Number"] || '';
       
-      // Get or create blob URL for current file
+      // Get blob URL for current file (or reuse if we've run out of files)
       let blobUrl: string;
-      if (!fileBlobUrls.has(fileIndex) && fileIndex < selectedFiles.length) {
-        // Create blob URL only when needed
-        blobUrl = URL.createObjectURL(selectedFiles[fileIndex]);
-        fileBlobUrls.set(fileIndex, blobUrl);
-        console.log(`[Index] Created blob URL for file ${fileIndex}: ${selectedFiles[fileIndex].name}`);
-      } else if (fileIndex < fileBlobUrls.size) {
+      if (fileIndex < fileBlobUrls.size) {
         blobUrl = fileBlobUrls.get(fileIndex)!;
+        // Move to next file after using this one (assumes one receipt per file)
+        // If a file produces multiple receipts, they'll reuse the same blob URL
+        fileIndex++;
       } else {
         // More receipts than files - reuse last file's blob URL
-        const lastIndex = Math.min(fileIndex, selectedFiles.length - 1);
-        if (!fileBlobUrls.has(lastIndex) && lastIndex >= 0) {
-          blobUrl = URL.createObjectURL(selectedFiles[lastIndex]);
-          fileBlobUrls.set(lastIndex, blobUrl);
-        } else {
-          blobUrl = fileBlobUrls.get(lastIndex) || fileBlobUrls.get(fileBlobUrls.size - 1)!;
-        }
+        // This handles cases where a single file produces multiple receipts
+        blobUrl = fileBlobUrls.get(fileBlobUrls.size - 1)!;
       }
       
       // Map this receipt to the blob URL
@@ -270,21 +251,27 @@ const Index = () => {
         // Use index-based key if no invoice number
         imagesMap.set(`receipt-${receiptIndex}`, blobUrl);
       }
-      
-      // Move to next file after using this one (assumes one receipt per file)
-      // If a file produces multiple receipts, they'll reuse the same blob URL
-      fileIndex++;
     }
     
-    console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} blob URLs for ${allResults.length} receipts`);
+    console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} files for ${allResults.length} receipts`);
 
     // IMPORTANT: Set results and images BEFORE closing scanner to prevent cleanup issues
     console.log(`[Index] Setting ${allResults.length} results, ${imagesMap.size} image mappings`);
     setReceiptImagesMap(imagesMap);
     setResults(allResults); // Use direct setResults here since we're intentionally setting new results
-    setShowResults(true);
-    setShowConfetti(true);
     setIsProcessing(false);
+    
+    // Check if lead was captured - if not, show gate first
+    const captured = localStorage.getItem('lead_captured') === '1';
+    if (captured) {
+      // Already captured, show results immediately
+      setShowResults(true);
+      setShowConfetti(true);
+    } else {
+      // Not captured, show lead gate first
+      setShowLeadGate(true);
+      setShowConfetti(true);
+    }
     
     // Verify results are set correctly
     setTimeout(() => {
@@ -394,7 +381,7 @@ const Index = () => {
         controller.abort();
         clearInterval(progressInterval);
         setProcessingProgress(0);
-      }, 180000); // 3 minute timeout (PDFs may take longer)
+      }, 120000); // 2 minute timeout
 
       let response;
       try {
@@ -683,7 +670,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen mesh-gradient-dark">
+    <div className={`min-h-screen mesh-gradient-dark ${showLeadGate ? 'blur-sm pointer-events-none select-none' : ''}`}>
       {/* Particle Text Effect Overlay */}
       {showParticleEffect && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
@@ -843,9 +830,27 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Lead Gate Modal */}
+      <LeadGate
+        isOpen={showLeadGate}
+        onClose={() => {
+          // User closed without submitting - still show results but mark as dismissed
+          setShowLeadGate(false);
+          setShowResults(true);
+        }}
+        onFormSubmitted={() => {
+          // Form submitted - show results
+          setLeadCaptured(true);
+          setShowResults(true);
+        }}
+      />
+
       {/* Results Section */}
       {showResults && results.length > 0 && (
-        <section id="results-section" className="py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+        <section 
+          id="results-section" 
+          className={`py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden ${showLeadGate ? 'blur-md pointer-events-none select-none' : ''}`}
+        >
           {/* Background decoration */}
           <div className="absolute inset-0 opacity-5">
             <div className="absolute top-10 right-10 w-32 h-32 bg-turquoise-500 rounded-full mix-blend-multiply filter blur-xl"></div>
