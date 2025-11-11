@@ -93,6 +93,19 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontSize: {
+        // Match meshpayments.com typography scale
+        'xs': ['12px', { lineHeight: '1.5' }],
+        'sm': ['14px', { lineHeight: '1.5' }],
+        'base': ['16px', { lineHeight: '1.5' }], // Mobile default
+        'lg': ['18px', { lineHeight: '1.5' }], // Desktop paragraph (matches meshpayments.com)
+        'xl': ['20px', { lineHeight: '1.4' }],
+        '2xl': ['24px', { lineHeight: '1.3' }],
+        '3xl': ['28px', { lineHeight: '1.2' }],
+        '4xl': ['34px', { lineHeight: '1.2' }],
+        '5xl': ['44px', { lineHeight: '1.1' }],
+        '6xl': ['58px', { lineHeight: '1.1' }],
+      },
       keyframes: {
         "accordion-down": {
           from: {

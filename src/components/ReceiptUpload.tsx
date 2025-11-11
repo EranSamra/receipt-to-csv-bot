@@ -69,23 +69,23 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
       return isImageByType || isPDFByType || isImageByExtension || isPDFByExtension;
     });
     
-    if (files.length > 0) {
-      onFilesSelected([...selectedFiles, ...files].slice(0, 30));
-    }
+      if (files.length > 0) {
+        onFilesSelected([...selectedFiles, ...files].slice(0, 30));
+      }
   };
 
   return (
     <div className="space-y-6">
       {/* Hidden File Input */}
-      <input
-        id="file-upload"
-        type="file"
-        multiple
+          <input
+            id="file-upload"
+            type="file"
+            multiple
         accept="image/*,.pdf"
-        onChange={handleFileInput}
+            onChange={handleFileInput}
         ref={fileInputRef}
-        className="hidden"
-      />
+            className="hidden"
+          />
       {selectedFiles.length === 0 ? (
         /* Upload Area - Show when no files selected */
         <div
@@ -125,7 +125,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
             {/* File Count */}
             <p className="text-xs sm:text-sm text-gray-500 mt-4 sm:mt-6 px-2">
               Up to 30 files • Supports JPG, PNG, WEBP, HEIC, PDF formats ((Max 1MB each))
-            </p>
+          </p>
           </div>
         </div>
       ) : (

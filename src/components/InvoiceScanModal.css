@@ -1,0 +1,146 @@
+.scan-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.scan-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.05), transparent 40%),
+    radial-gradient(rgba(255,255,255,0.04), transparent 40%);
+  background-size: 1600px 1600px, 1000px 1000px;
+  background-position: -20% -20%, 120% 80%;
+}
+
+.scan-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 28px;
+  background: transparent;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.8;
+  z-index: 10;
+}
+
+.scan-close:hover { opacity: 1; }
+
+.scan-hints {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-auto-rows: 90px;
+  gap: 12px;
+  padding: 48px;
+  opacity: 0.15;
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.scan-hint-card {
+  position: relative;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.scan-hint-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.6;
+}
+
+.scan-hint-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 25%;
+  top: -25%;
+  background:
+    radial-gradient(closest-side, rgba(255,255,255,0.4), rgba(255,255,255,0.08) 70%, transparent),
+    linear-gradient(to bottom, rgba(20,184,166,0), rgba(20,184,166,0.5), rgba(20,184,166,0));
+  filter: blur(0.4px);
+  animation: hintScan 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes hintScan {
+  0%   { transform: translateY(0%); }
+  100% { transform: translateY(420%); }
+}
+
+.scan-center {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  color: #fff;
+}
+
+.scan-preview {
+  position: relative;
+  width: min(86vw, 820px);
+  max-height: 78vh;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+  background: #0a0a0a;
+}
+
+.scan-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.02), transparent 40%, rgba(255,255,255,0.02));
+}
+
+.scan-line {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  height: 18%;
+  top: -18%;
+  border-radius: 8px;
+  background:
+    radial-gradient(closest-side, rgba(255,255,255,0.85), rgba(255,255,255,0.10) 70%, transparent),
+    linear-gradient(to bottom, rgba(20,184,166,0), rgba(20,184,166,0.7), rgba(20,184,166,0));
+  box-shadow:
+    0 0 24px rgba(20,184,166,0.7),
+    0 0 72px rgba(20,184,166,0.35),
+    inset 0 0 24px rgba(255,255,255,0.15);
+  filter: blur(0.3px);
+  animation: scanY 1.8s ease-in-out infinite alternate;
+  transform: translateZ(0);
+}
+
+@keyframes scanY {
+  0%   { transform: translateY(0%); }
+  100% { transform: translateY(520%); }
+}
+
+.scan-copy {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-line, .scan-hint-line { animation: none; display: none; }
+  .scan-copy::after { content: " (reduced motion)"; font-size: 12px; opacity: 0.6; }
+}
+

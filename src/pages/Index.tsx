@@ -10,10 +10,14 @@ import { useToast } from "@/hooks/use-toast";
 import { convertToCSV, downloadCSV } from "@/utils/csvUtils";
 import { ParticleTextEffect } from "@/components/ui/particle-text-effect";
 import { logMobileFileInfo, logMobileFetchInfo, logMobileError, detectMobileDevice } from "@/utils/mobileDebug";
+import InvoiceScanModal from "@/components/InvoiceScanModal";
+import MeshReceiptScanner from "@/components/MeshReceiptScanner";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [results, setResults] = useState<ReceiptData[]>([]);
+  const [receiptImagesMap, setReceiptImagesMap] = useState<Map<string, string>>(new Map());
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [showResults, setShowResults] = useState(false);
@@ -21,6 +25,8 @@ const Index = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showParticleEffect, setShowParticleEffect] = useState(false);
   const [showExamplesModal, setShowExamplesModal] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [showMeshScanner, setShowMeshScanner] = useState(false);
   const { toast } = useToast();
 
   // Trigger animations on mount
@@ -43,6 +49,23 @@ const Index = () => {
     }
   }, [showResults, results]);
 
+  // Monitor results to detect if they're being cleared unexpectedly
+  useEffect(() => {
+    if (results.length > 0) {
+      console.log(`[Index] Results state updated: ${results.length} receipts`);
+    } else if (showResults && results.length === 0) {
+      console.warn(`[Index] WARNING: Results were cleared but showResults is still true!`);
+    }
+  }, [results, showResults]);
+  
+  // Ensure selectedFiles persist after scanning completes
+  // This is critical for blob URL validity
+  useEffect(() => {
+    if (showResults && results.length > 0 && selectedFiles.length === 0) {
+      console.warn(`[Index] WARNING: selectedFiles was cleared but results exist! This may cause blob URL issues.`);
+    }
+  }, [showResults, results.length, selectedFiles.length]);
+
   const handleRemoveFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
@@ -53,12 +76,22 @@ const Index = () => {
     setResults([]);
   };
 
-  const parseCSVToResults = (csvText: string): ReceiptData[] => {
+  const parseCSVToResults = (csvText: string, lineItemsData?: Array<{ invoiceNumber: string; lineItems: Array<{ description: string; date: string; amount: string; category: string }> }>): ReceiptData[] => {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
 
     const headers = lines[0].split(',');
     const dataRows = lines.slice(1);
+
+    // Create a map of invoice numbers to line items
+    const lineItemsMap = new Map<string, Array<{ description: string; date: string; amount: string; category: string }>>();
+    if (lineItemsData) {
+      lineItemsData.forEach(item => {
+        if (item.invoiceNumber && item.lineItems && item.lineItems.length > 0) {
+          lineItemsMap.set(item.invoiceNumber, item.lineItems);
+        }
+      });
+    }
 
     return dataRows.map(row => {
       // Handle quoted fields with commas
@@ -85,11 +118,199 @@ const Index = () => {
         obj[header.trim()] = values[index]?.replace(/^"|"$/g, '').replace(/""/g, '"') || '';
       });
 
+      // Add line items if they exist for this invoice number
+      const invoiceNumber = obj["Invoice Number"] || '';
+      if (invoiceNumber && lineItemsMap.has(invoiceNumber)) {
+        obj.lineItems = lineItemsMap.get(invoiceNumber);
+      }
+
       return obj as ReceiptData;
     });
   };
 
-  const handleProcess = async () => {
+  // Extract receipt function for MeshReceiptScanner
+  const extractReceiptFn = async (file: File): Promise<{ ok: boolean; data?: any }> => {
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      // Environment-based API URL
+      const API_URL = import.meta.env.DEV 
+        ? 'http://localhost:3001/api/extract-receipts'
+        : '/api/extract-receipts';
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data || !data.csv || typeof data.csv !== 'string') {
+        throw new Error('Invalid response format from server');
+      }
+
+      // Parse CSV to get receipt data
+      const parsedResults = parseCSVToResults(data.csv, data.lineItems);
+      
+      console.log(`[Index] extractReceiptFn: Parsed ${parsedResults.length} receipt(s) from file ${file.name}`);
+      
+      if (parsedResults.length === 0) {
+        console.warn(`[Index] WARNING: File ${file.name} produced 0 receipts after parsing CSV`);
+        throw new Error('No valid receipt data extracted');
+      }
+
+      // Return all parsed results (a single file can produce multiple receipts)
+      return { ok: true, data: parsedResults };
+    } catch (error: any) {
+      console.error('Error extracting receipt:', error);
+      return { ok: false };
+    }
+  };
+
+  const handleScanComplete = (results: any[]) => {
+    // Combine all results
+    const allResults = results.filter(r => r !== null && r !== undefined);
+    
+    console.log(`[Index] handleScanComplete: Received ${results.length} results, ${allResults.length} after filtering null/undefined`);
+    console.log(`[Index] Expected ${selectedFiles.length} files, got ${allResults.length} receipts`);
+    
+    if (allResults.length === 0) {
+      toast({
+        title: "Processing failed",
+        description: "No valid receipt data extracted",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      // Delay closing to allow cleanup
+      setTimeout(() => setShowMeshScanner(false), 100);
+      return;
+    }
+
+    // Create blob URLs for receipt images and map them to invoice numbers
+    // CRITICAL: Create blob URLs immediately and store them before scanner closes
+    // This ensures they persist even if selectedFiles changes or scanner unmounts
+    const imagesMap = new Map<string, string>();
+    
+    // Create blob URLs for ALL files immediately to ensure they persist
+    // Store them in a map that won't be affected by scanner cleanup
+    const fileBlobUrls = new Map<number, string>();
+    selectedFiles.forEach((file, index) => {
+      // Create blob URL immediately - these will persist even after scanner closes
+      fileBlobUrls.set(index, URL.createObjectURL(file));
+    });
+    
+    // Map receipts to files: process all receipts and assign them to files
+    // Since MeshReceiptScanner processes files sequentially and returns results in order,
+    // we match receipts to files by index (one receipt per file, or multiple receipts from same file)
+    let fileIndex = 0;
+    
+    for (let receiptIndex = 0; receiptIndex < allResults.length; receiptIndex++) {
+      const receipt = allResults[receiptIndex];
+      const invoiceNumber = receipt["Invoice Number"] || '';
+      
+      // Get blob URL for current file (or reuse if we've run out of files)
+      let blobUrl: string;
+      if (fileIndex < fileBlobUrls.size) {
+        blobUrl = fileBlobUrls.get(fileIndex)!;
+        // Move to next file after using this one (assumes one receipt per file)
+        // If a file produces multiple receipts, they'll reuse the same blob URL
+        fileIndex++;
+      } else {
+        // More receipts than files - reuse last file's blob URL
+        // This handles cases where a single file produces multiple receipts
+        blobUrl = fileBlobUrls.get(fileBlobUrls.size - 1)!;
+      }
+      
+      // Map this receipt to the blob URL
+      if (invoiceNumber) {
+        imagesMap.set(invoiceNumber, blobUrl);
+      } else {
+        // Use index-based key if no invoice number
+        imagesMap.set(`receipt-${receiptIndex}`, blobUrl);
+      }
+    }
+    
+    console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} files for ${allResults.length} receipts`);
+
+    // IMPORTANT: Set results and images BEFORE closing scanner to prevent cleanup issues
+    console.log(`[Index] Setting ${allResults.length} results, ${imagesMap.size} image mappings`);
+    setReceiptImagesMap(imagesMap);
+    setResults(allResults); // Use direct setResults here since we're intentionally setting new results
+    setShowResults(true);
+    setShowConfetti(true);
+    setIsProcessing(false);
+    
+    // Verify results are set correctly
+    setTimeout(() => {
+      console.log(`[Index] Results state after 100ms: ${allResults.length} receipts`);
+    }, 100);
+    
+    // Delay closing scanner to ensure state is set first
+    // This prevents the scanner from revoking blob URLs before we've stored them
+    setTimeout(() => {
+      setShowMeshScanner(false);
+      console.log(`[Index] Scanner closed, results should persist: ${allResults.length} receipts`);
+    }, 200);
+    
+    // Hide confetti after animation (this should NOT affect results)
+    setTimeout(() => {
+      setShowConfetti(false);
+      console.log(`[Index] Confetti hidden at 5s, checking results still exist...`);
+      // Verify results haven't been cleared
+      setTimeout(() => {
+        console.log(`[Index] Results check after confetti: should still have ${allResults.length} receipts`);
+      }, 100);
+    }, 5000);
+    
+    toast({
+      title: "✅ Data extracted successfully",
+      description: "Your receipts have been processed using Mesh AI Extraction Engine.",
+    });
+  };
+
+  const handleScanError = (error: Error) => {
+    console.error('Scan error:', error);
+    toast({
+      title: "Processing failed",
+      description: error.message || "Failed to process receipts",
+      variant: "destructive",
+    });
+    setIsProcessing(false);
+    setShowMeshScanner(false);
+  };
+
+  const handleProcess = () => {
+    if (selectedFiles.length === 0) {
+      toast({
+        title: "No files selected",
+        description: "Please upload at least one receipt image",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log(`[Index] handleProcess: Starting processing for ${selectedFiles.length} files`);
+    setIsProcessing(true);
+    setShowMeshScanner(true);
+    setShowParticleEffect(false);
+  };
+
+  // Old handleProcess - keeping for backward compatibility but not used
+  const handleProcessOld = async () => {
     if (selectedFiles.length === 0) {
       toast({
         title: "No files selected",
@@ -100,7 +321,6 @@ const Index = () => {
     }
 
     setIsProcessing(true);
-    setProcessingProgress(0);
     setShowParticleEffect(true);
 
     try {
@@ -265,7 +485,7 @@ const Index = () => {
         }
         throw new Error(`Failed to parse server response: ${parseError.message || 'Unknown error'}`);
       }
-      const parsedResults = parseCSVToResults(data.csv);
+      const parsedResults = parseCSVToResults(data.csv, data.lineItems);
 
       // Validate parsed results
       if (!parsedResults || parsedResults.length === 0) {
@@ -275,6 +495,8 @@ const Index = () => {
       setResults(parsedResults);
       setShowResults(true);
       setShowConfetti(true);
+      setShowScanModal(false);
+      setShowParticleEffect(false);
       
       // Hide confetti after animation
       setTimeout(() => setShowConfetti(false), 5000);
@@ -285,7 +507,7 @@ const Index = () => {
       });
 
     } catch (error: any) {
-      clearInterval(progressInterval);
+      // Cleanup handled in finally block
       
       // Mobile debugging - Log error details
       logMobileError(error, 'Receipt Processing');
@@ -399,6 +621,7 @@ const Index = () => {
       setIsProcessing(false);
       setProcessingProgress(0);
       setShowParticleEffect(false);
+      setShowScanModal(false);
     }
   };
 
@@ -619,10 +842,10 @@ const Index = () => {
 
               <div className="mesh-card p-8 mesh-shadow-xl border-2 border-turquoise-100">
                 <div className="mb-8">
-                  <h3 className="text-2xl font-bold text-gray-800 mb-2">Expense Data</h3>
-                  <p className="text-gray-600">{results.length} receipt{results.length > 1 ? 's' : ''} processed successfully</p>
+                  <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Expense Data</h3>
+                  <p className="text-base md:text-lg text-gray-600">{results.length} receipt{results.length > 1 ? 's' : ''} processed successfully</p>
                 </div>
-                <ResultsTable data={results} />
+                <ResultsTable data={results} receiptImages={receiptImagesMap} />
               </div>
             </div>
           </div>
@@ -644,6 +867,21 @@ const Index = () => {
         onClose={() => setShowExamplesModal(false)}
         onLoadSelected={handleLoadSelectedExamples}
       />
+
+      {/* Mesh Receipt Scanner */}
+      {showMeshScanner && selectedFiles.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+          <div className="w-full max-w-7xl">
+            <MeshReceiptScanner
+              key={`scanner-${selectedFiles.length}-${selectedFiles.map(f => `${f.name}-${f.size}`).join('|')}`}
+              files={selectedFiles}
+              onScanComplete={handleScanComplete}
+              onError={handleScanError}
+              extractReceiptFn={extractReceiptFn}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

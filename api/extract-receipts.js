@@ -3,6 +3,50 @@ function encodeBase64(buffer) {
   return Buffer.from(buffer, 'binary').toString('base64');
 }
 
+// Helper function to convert JSON receipt to CSV row
+function jsonToCSVRow(receipt, receiptIdMap = {}) {
+  // Map fraud risk from confidence
+  let fraudRisk = 'Low';
+  if (receipt.flags?.suspicious_fraud_risk?.value === true) {
+    const conf = receipt.flags.suspicious_fraud_risk.confidence || 0;
+    if (conf >= 0.75) fraudRisk = 'High';
+    else if (conf >= 0.6) fraudRisk = 'Medium';
+  }
+  
+  // Map duplicate flag
+  const duplicate = receipt.flags?.duplicate?.value === true ? 'Yes' : 'No';
+  
+  // Map alcohol/tobacco from unauthorized_category
+  const alcoholTobacco = receipt.flags?.unauthorized_category?.value === true && 
+    receipt.flags?.unauthorized_category?.categories?.some(cat => 
+      cat === 'Alcohol' || cat === 'Tobacco'
+    ) ? 'Yes' : 'No';
+  
+  // Map personal expense
+  const personalExpense = receipt.flags?.suspicious_personal?.value === true ? 
+    'Suspicious Personal' : 'No';
+  
+  // Extract invoice number from receipt (extracted from document, not generated)
+  const invoiceNumber = receipt.invoice_number || '';
+  
+  // Extract notes from receipt
+  const notes = receipt.notes || '';
+  
+  return [
+    invoiceNumber || '',
+    receipt.date || '',
+    receipt.amount !== undefined ? String(receipt.amount) : '',
+    receipt.currency || '',
+    receipt.merchant || '',
+    receipt.transaction_type || 'Other',
+    fraudRisk,
+    duplicate,
+    alcoholTobacco,
+    personalExpense,
+    notes
+  ].join(',');
+}
+
 export default async function handler(req, res) {
   // Enable CORS for mobile browsers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -128,78 +172,154 @@ export default async function handler(req, res) {
             contents: [{
               parts: [
                 { 
-                  text: `You are a deterministic receipt data extractor. Return only a CSV that matches the exact schema and column order below. Do not include explanations, code fences, JSON, or any extra text. Output the CSV only.
+                  text: `SYSTEM: You are a deterministic receipt extraction and policy classification engine for enterprise expense management. Extract fields, classify fraud and policy risks, then return a single JSON array of receipt objects. Be conservative when flagging. Provide evidence for every non-empty flag. Return JSON only, no extra text.
 
-Schema
+TASK: Extract and classify the following receipt image or OCR text. Follow the schema and rules exactly.
 
-CSV header and order must be exactly:
-Invoice Number,Date,Amount,Currency,Merchant,Transaction Type
+STRICT OUTPUT CONTRACT:
 
-Field definitions
+Return a single top-level JSON array
 
-Invoice Number: Receipt number, invoice ID, transaction reference, or order number EXTRACTED FROM THE DOCUMENT. NEVER invent or generate invoice numbers. If no invoice number is visible in the document, leave this field completely empty. If multiple rows have the same invoice number, use the same invoice number for all related rows.
+Each element must match the schema exactly, no extra keys
 
-Date: Transaction date in YYYY-MM-DD. If only month and year are present, use the first day of that month. If both order and payment dates appear, use the payment date. Leave blank if unknown.
+Use a decimal point for numbers
 
-Amount: Final amount paid as a positive decimal with a period for decimals. Include tax and tip if they are part of the final total. If the document indicates a refund or return, make the amount negative.
+Dates are YYYY-MM-DD
 
-Currency: ISO 4217 code in uppercase. If the receipt shows a symbol, map it to the likely ISO code. If multiple currencies appear, choose the currency of the charged total. Leave blank if unknown.
+If a field is unknown, use an empty string for strings or null where allowed
 
-Merchant: Merchant or brand name, normalized by removing legal suffixes (Inc, LLC, Ltd, GmbH). Keep the primary brand name.
+Never fabricate invoice_number
 
-Transaction Type: One of only these values: Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other.
+OUTPUT SCHEMA:
+Each array element is an object with exactly these keys and order:
 
-Map examples:
+receipt_id: string, generate as "${file.filename}-${Date.now()}"
+invoice_number: string, from the document only, never invent, empty if none
+date: string, YYYY-MM-DD or empty
+amount: number, final paid amount, negative for refunds
+currency: string, ISO 4217 uppercase or empty
+merchant: string, normalized brand name
+transaction_type: string, one of Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other
 
-Visa, Mastercard, Amex, credit card, POS card slip -> Card
+flags: object with keys:
+  suspicious_fraud_risk: { value: true|false, confidence: 0-1, evidence: [strings] }
+  duplicate: { value: true|false, confidence: 0-1, evidence: [strings], duplicate_of: receipt_id|null }
+  unauthorized_category: { value: true|false, confidence: 0-1, categories: [strings], evidence: [strings] } // allowed categories: Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other
+  suspicious_personal: { value: true|false, confidence: 0-1, evidence: [strings], vendor_match: [strings] }
 
-Cash, paid in cash -> Cash
+confidence_overall: number, 0-1
+notes: string, short machine readable note if needed
+line_items: array optional, include only if the document contains multiple distinct items
 
-Bank transfer, ACH, SEPA, wire -> Wire
+Each item: { description: string, date: string YYYY-MM-DD or empty, amount: number, category: "Food"|"Beverage"|"Alcohol"|"Tobacco"|"Service"|"Tax"|"Tip"|"Other" }
 
-Internal account transfer -> Transfer
+PRIMARY EXTRACTION RULES:
 
-Invoice to be paid or invoice paid later -> Invoice
+Date: prefer payment or settlement date, if only month and year, use first day of that month, normalize to YYYY-MM-DD
 
-Refund receipt or return processed -> Refund
+Amount: use the final Total or Amount paid, do not recompute when a final total exists, strip symbols and thousands separators
 
-Store credit issued -> Credit
+Currency: map symbol to ISO code when clear, otherwise empty
 
-Debit card -> Debit
+Merchant: remove legal suffixes such as Inc, Ltd, LLC, GmbH, prefer the visible brand
 
-Unclear -> Other
+Transaction type: if a card brand or last 4 appears, set Card, for refunds, set Refund and make the amount negative
 
-Extraction rules
+FLAGGING RULES:
 
-One row per distinct receipt or transaction. If a file contains multiple receipts, output one row per receipt.
+suspicious_fraud_risk:
 
-DUPLICATE DETECTION: If the same receipt appears multiple times in the uploaded files (same merchant, same date, same amount), add "DUPLICATE RECEIPT UPLOADED" to the Merchant field for the duplicate entries. This helps identify when users accidentally upload the same receipt twice.
+Set value true when combined confidence >= 0.6 with evidence. Otherwise false, but include any evidence found
 
-Prefer "Total" or "Amount paid" for Amount. If a final total exists, do not recompute from subtotal and tax.
+Visual or metadata anomalies: no-exif, screenshot-metadata, generator-tag, layered-artifacts, cloned-patches, vector-font-pattern, uniform-kerning
 
-Strip currency symbols and thousand separators in Amount. Keep two decimal places when present.
+Content anomalies: impossible-invoice-format, invalid-tax-id, currency-mismatch, impossible-total, merchant-not-found, domain-mismatch:merchant/domain, phone-format-invalid
 
-Normalize dates to YYYY-MM-DD.
+Consistency anomalies: mismatch-total-lines, duplicated-line-items, subtotal-tax-mismatch without a valid discount or service line
 
-If authorization and settlement differ, use the settled amount.
+Behavioral indicators in a single file or batch: repeated-layout-pattern, multiple-receipts-perfectly-uniform
 
-If multiple currencies appear with a conversion, choose the currency actually charged.
+duplicate:
 
-If payment instrument is unclear but a card brand or last 4 digits appear, set Transaction Type to Card.
+Scope is within the same image or batch only
 
-If the file is a quote, pro forma, or only a shopping cart with no payment, do not output a row.
+Set value true when any apply, include duplicate_of when available
 
-If a field is truly missing, leave the cell empty. Do not invent values. This is especially important for Invoice Number - only extract what is actually visible in the document. Never generate or create invoice numbers.
+image-hash-match, exact duplicate in image or batch
 
-Do not add or remove columns. Do not reorder columns. Include the header exactly once.
+phash-similarity:X, perceptual near duplicate, Hamming distance threshold for near match
 
-Output format
+ocr-similarity:XX, normalized similarity for merchant+date+amount above 95 percent
 
-Return only the CSV.
+merchant-amount-date-match, same merchant, amount, date within 1 day and near-identical card last4
 
-Use commas as separators. No trailing commas.
+same-invoice-number, the same invoice_number appears again in the same image or batch
 
-Do not wrap values in quotes unless a field contains a comma. Dates and amounts should not be quoted.` 
+If only one receipt is processed in this call, set duplicate.value false
+
+unauthorized_category:
+
+Set value true when merchant or line items indicate forbidden categories
+
+Keyword anchors
+
+Alcohol: wine, beer, liquor, bar, brewery, pub, spirits
+
+Tobacco: cigarette, cigar, tobacco, vape, vaping
+
+Gambling: casino, sportsbook, bet, wager, slot, poker, roulette
+
+Adult: onlyfans, porn, xxx, cam, adult store, strip club
+
+Pharmaceuticals: pharmacy, prescription, rx, medication
+
+Evidence strings must reference tokens found, for example line-item:beer, merchant-token:pub, vendor-token:OnlyFans
+
+suspicious_personal:
+
+Recognize clear personal spend, including brands like OnlyFans, Zara, H&M, Victoria's Secret, Sephora, Shein, Temu, Netflix, Spotify, Apple App Store, Google Play, Uber Eats, Deliveroo, DoorDash, Steam, Epic Games
+
+Heuristics
+
+Exact vendor token in merchant, domain, or receipt header, high confidence
+
+Line items strongly personal without business context, medium confidence
+
+Generic marketplaces require item evidence, lower confidence
+
+Evidence examples: vendor-token:Zara, merchant-domain:onlyfans.com, line-item:subscription, line-item:cosmetics
+
+EVIDENCE FORMAT:
+
+Short tokens or token:value pairs only
+
+Examples: no-exif, image-hash-match, phash-similarity:4, ocr-similarity:97, vendor-token:OnlyFans, line-item:beer, domain-mismatch:merchant/domain, impossible-total, phone-format-invalid, invalid-tax-id:GB
+
+ACTIONABLE OUTPUTS:
+
+If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Hold for manual review, potential AI generated receipt"
+
+If duplicate.value true and confidence >= 0.9, notes = "Auto reject duplicate", include duplicate_of
+
+If unauthorized_category.value true and categories contains Alcohol or Gambling and confidence >= 0.7, notes = "Flag for policy violation, require approver"
+
+If suspicious_personal.value true and confidence >= 0.7, notes = "Flag as personal expense"
+
+LINE ITEM EXTRACTION:
+
+Include line_items only when multiple distinct items are present, do not add an empty array
+
+Each item must have description and amount, add category if clear
+
+ROBUSTNESS RULES:
+
+Never fabricate invoice_number
+
+If totals conflict, prefer the final Total or Amount paid, then add mismatch-total-lines to evidence
+
+If merchant appears as a domain or email, normalize to brand when obvious and add merchant-domain:brand.tld to evidence
+
+If OCR is low confidence, leave unreadable fields empty` 
                   },
                   { inline_data: { mime_type: file.mimetype, data: base64 } }
                 ]
@@ -222,50 +342,99 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
         }
 
         const data = await response.json();
-        const csvContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const fullContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         
-        // Parse CSV content - new schema: Invoice Number,Date,Amount,Currency,Merchant,Transaction Type
-        const lines = csvContent.trim().split('\n');
+        // Parse JSON response
+        let jsonReceipts = [];
+        let lineItems = [];
         
-        // If we have multiple lines, process each data row (skip header)
-        if (lines.length > 1) {
-          const dataRows = lines.slice(1); // Skip header
-          let sharedInvoiceNumber = null;
+        try {
+          // Clean the content - remove markdown code fences if present
+          let cleanContent = fullContent.trim();
           
-          dataRows.forEach((row, index) => {
-            if (row.trim()) { // Only process non-empty rows
-              const columns = row.split(',');
-              
-              // For the first row, extract the invoice number to share with subsequent rows
-              if (index === 0 && columns.length >= 1) {
-                sharedInvoiceNumber = columns[0].trim();
-              }
-              
-              // If this row doesn't have an invoice number but we have a shared one, use it
-              if ((!columns[0] || columns[0].trim() === '') && sharedInvoiceNumber) {
-                columns[0] = sharedInvoiceNumber;
-                const updatedRow = columns.join(',');
-                results.push({
-                  filename: file.filename,
-                  csv: updatedRow.trim()
-                });
-              } else {
-                results.push({
-                  filename: file.filename,
-                  csv: row.trim()
+          // Remove markdown code blocks if present
+          cleanContent = cleanContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          
+          // Try to parse as JSON array
+          const parsed = JSON.parse(cleanContent);
+          jsonReceipts = Array.isArray(parsed) ? parsed : [parsed];
+          
+          console.log(`✅ Parsed ${jsonReceipts.length} receipt(s) from JSON for ${file.filename}`);
+        } catch (parseError) {
+          console.error(`Failed to parse JSON response for ${file.filename}:`, parseError);
+          console.error('Response content:', fullContent.substring(0, 500));
+          
+          // Fallback: try to extract JSON from text
+          const jsonMatch = fullContent.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              jsonReceipts = Array.isArray(parsed) ? parsed : [parsed];
+              console.log(`✅ Extracted JSON from text for ${file.filename}`);
+            } catch (e) {
+              console.error('Failed to extract JSON from text:', e);
+              results.push({
+                filename: file.filename,
+                error: 'Failed to parse AI response as JSON'
+              });
+              continue;
+            }
+          } else {
+            results.push({
+              filename: file.filename,
+              error: 'Failed to parse AI response as JSON'
+            });
+            continue;
+          }
+        }
+        
+        // Process each receipt from JSON
+        if (jsonReceipts.length === 0) {
+          console.warn(`⚠️ WARNING: File ${file.filename} produced 0 receipts from Gemini API`);
+          results.push({
+            filename: file.filename,
+            error: 'No receipts extracted from file'
+          });
+        } else {
+          for (const receipt of jsonReceipts) {
+            // Extract invoice number from receipt (must be extracted from document, not generated)
+            const invoiceNumber = receipt.invoice_number || '';
+            
+            // Extract line items if present
+            if (receipt.line_items && Array.isArray(receipt.line_items)) {
+              for (const item of receipt.line_items) {
+                lineItems.push({
+                  invoiceNumber: invoiceNumber,
+                  description: item.description || '',
+                  date: item.date || receipt.date || '',
+                  amount: item.amount !== undefined ? String(item.amount) : '',
+                  category: item.category || ''
                 });
               }
             }
-          });
-        } else if (lines.length === 1 && !lines[0].includes('Invoice Number')) {
-          // Single line that's not a header
-          results.push({
-            filename: file.filename,
-            csv: lines[0].trim()
-          });
+            
+            // Convert JSON receipt to CSV row
+            const csvRow = jsonToCSVRow(receipt);
+            
+            results.push({
+              filename: file.filename,
+              csv: csvRow,
+              lineItems: receipt.line_items && receipt.line_items.length > 0 ? 
+                receipt.line_items.map(item => ({
+                  invoiceNumber: invoiceNumber,
+                  description: item.description || '',
+                  date: item.date || receipt.date || '',
+                  amount: item.amount !== undefined ? String(item.amount) : '',
+                  category: item.category || ''
+                })) : undefined
+            });
+          }
+          
+          if (lineItems.length > 0) {
+            console.log(`✅ Extracted ${lineItems.length} line items for ${file.filename}`);
+          }
+          console.log(`✅ Successfully processed ${file.filename}: ${jsonReceipts.length} receipt(s) extracted`);
         }
-        
-        console.log(`Successfully processed ${file.filename}`);
         
       } catch (error) {
         console.error(`Error processing file ${file.filename}:`, error);
@@ -287,13 +456,211 @@ Do not wrap values in quotes unless a field contains a comma. Dates and amounts 
       }
     }
     
-    // Combine all results into a single CSV with new schema
-    const csvHeader = "Invoice Number,Date,Amount,Currency,Merchant,Transaction Type";
-    const csvRows = results.map(r => r.csv || '');
+    // Post-process: Detect duplicates across all files and collect line items
+    // Parse all CSV rows and check for duplicates
+    const allRows = [];
+    const allLineItems = new Map(); // Map invoice number to line items
+    
+    // Helper function to parse CSV line with quoted values
+    function parseCSVLine(line) {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote
+            current += '"';
+            i++; // Skip next quote
+          } else {
+            // Toggle quote state
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          // Field separator
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim()); // Add last field
+      return values;
+    }
+    
+    for (const result of results) {
+      if (result.csv) {
+        const lines = result.csv.trim().split('\n');
+        for (const line of lines) {
+          if (line.trim() && !line.trim().startsWith('Invoice Number')) { // Skip header
+            const values = parseCSVLine(line);
+            if (values.length >= 6) {
+              // Clean and trim all values (parseCSVLine already trims, but ensure quotes are removed and trimmed again)
+              const cleanValue = (val) => (val || '').replace(/^"|"$/g, '').trim();
+              
+              const invoiceNum = cleanValue(values[0]);
+              
+              // Find line items for this invoice number
+              const rowLineItems = result.lineItems?.filter(li => li.invoiceNumber === invoiceNum) || [];
+              
+              // Store line items in map
+              if (invoiceNum && rowLineItems.length > 0) {
+                if (!allLineItems.has(invoiceNum)) {
+                  allLineItems.set(invoiceNum, []);
+                }
+                allLineItems.get(invoiceNum).push(...rowLineItems);
+              }
+              
+              allRows.push({
+                invoiceNumber: invoiceNum,
+                date: cleanValue(values[1]),
+                amount: cleanValue(values[2]),
+                currency: cleanValue(values[3]),
+                merchant: cleanValue(values[4]),
+                transactionType: cleanValue(values[5]) || 'Other',
+                fraudRisk: cleanValue(values[6]) || 'Low',
+                duplicate: cleanValue(values[7]) || 'No',
+                alcoholTobacco: cleanValue(values[8]) || 'No',
+                personalExpense: cleanValue(values[9]) || 'No',
+                notes: cleanValue(values[10]) || ''
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    // Normalize values for duplicate comparison
+    const normalizeForDuplicate = (row) => {
+      // Normalize merchant: trim, lowercase, collapse multiple spaces
+      const merchant = (row.merchant || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      
+      // Normalize date: trim
+      const date = (row.date || '').trim();
+      
+      // Normalize amount: remove currency symbols, parse to float, normalize decimals
+      const amountStr = (row.amount || '').toString().trim();
+      const amount = parseFloat(amountStr.replace(/[^\d.-]/g, '')) || 0;
+      const normalizedAmount = amount.toFixed(2);
+      
+      return { merchant, date, amount: normalizedAmount };
+    };
+    
+    // Detect duplicates: check by invoice number first (strongest signal), then merchant+date+amount
+    const seen = new Map(); // merchant|date|amount
+    const seenByInvoice = new Map(); // invoice number -> index
+    
+    for (let i = 0; i < allRows.length; i++) {
+      const row = allRows[i];
+      
+      // Check by invoice number first (strongest duplicate signal)
+      if (row.invoiceNumber && row.invoiceNumber.trim()) {
+        const invoiceKey = row.invoiceNumber.trim();
+        if (seenByInvoice.has(invoiceKey)) {
+          const firstIndex = seenByInvoice.get(invoiceKey);
+          allRows[firstIndex].duplicate = 'Yes';
+          row.duplicate = 'Yes';
+          console.log(`✓ Duplicate detected by invoice number: "${invoiceKey}" (rows ${firstIndex} and ${i})`);
+          continue;
+        } else {
+          seenByInvoice.set(invoiceKey, i);
+        }
+      }
+      
+      // Check by merchant+date+amount (normalized)
+      const normalized = normalizeForDuplicate(row);
+      const key = `${normalized.merchant}|${normalized.date}|${normalized.amount}`;
+      
+      if (seen.has(key)) {
+        // Mark both the first occurrence and this one as duplicates
+        const firstIndex = seen.get(key);
+        allRows[firstIndex].duplicate = 'Yes';
+        row.duplicate = 'Yes';
+        console.log(`✓ Duplicate detected by merchant+date+amount: merchant="${normalized.merchant}", date="${normalized.date}", amount="${normalized.amount}" (rows ${firstIndex} and ${i})`);
+      } else {
+        seen.set(key, i);
+      }
+    }
+    
+    // Rebuild CSV with updated duplicate flags
+    const csvHeader = "Invoice Number,Date,Amount,Currency,Merchant,Transaction Type,Fraud Risk,Duplicate,Alcohol/Tobacco,Personal Expense,Notes";
+    const csvRows = allRows.map(row => {
+      return [
+        row.invoiceNumber || '',
+        row.date || '',
+        row.amount || '',
+        row.currency || '',
+        row.merchant || '',
+        row.transactionType || '',
+        row.fraudRisk || 'Low',
+        row.duplicate || 'No',
+        row.alcoholTobacco || 'No',
+        row.personalExpense || 'No',
+        row.notes || ''
+      ].join(',');
+    });
     const finalCsv = [csvHeader, ...csvRows].join('\n');
     
+    // Structure response with line items
+    const lineItemsArray = Array.from(allLineItems.entries()).map(([invoiceNumber, items]) => ({
+      invoiceNumber: invoiceNumber,
+      lineItems: items.map((item: any) => ({
+        description: item.description || '',
+        date: item.date || '',
+        amount: item.amount || '',
+        category: item.category || ''
+      }))
+    })).filter(item => item.lineItems.length > 0);
+    
+    const responseData = {
+      csv: finalCsv,
+      lineItems: lineItemsArray
+    };
+    
     console.log('Extraction completed successfully');
-    res.status(200).json({ csv: finalCsv });
+    
+    // Count files with errors vs success
+    const filesWithErrors = results.filter(r => r.error).length;
+    const filesWithCSV = results.filter(r => r.csv).length;
+    const totalFilesProcessed = results.length;
+    
+    console.log(`📁 Files processed: ${totalFilesProcessed} total, ${filesWithCSV} successful, ${filesWithErrors} errors`);
+    
+    const duplicateCount = allRows.filter(r => r.duplicate === 'Yes').length;
+    const fraudRiskCount = allRows.filter(r => r.fraudRisk === 'High' || r.fraudRisk === 'Medium').length;
+    const alcoholTobaccoCount = allRows.filter(r => r.alcoholTobacco === 'Yes').length;
+    const personalExpenseCount = allRows.filter(r => r.personalExpense === 'Suspicious Personal').length;
+    
+    console.log(`📊 Summary: ${allRows.length} receipts extracted from ${filesWithCSV} successful files`);
+    
+    if (filesWithErrors > 0) {
+      console.warn(`⚠️ ${filesWithErrors} file(s) failed to extract:`);
+      results.filter(r => r.error).forEach(r => {
+        console.warn(`  - ${r.filename}: ${r.error}`);
+      });
+    }
+    if (duplicateCount > 0) {
+      console.log(`  ⚠️  ${duplicateCount} duplicate receipt(s) detected`);
+    }
+    if (fraudRiskCount > 0) {
+      console.log(`  🛡️  ${fraudRiskCount} receipt(s) with fraud risk (Medium/High)`);
+    }
+    if (alcoholTobaccoCount > 0) {
+      console.log(`  🍷 ${alcoholTobaccoCount} receipt(s) contain alcohol/tobacco`);
+    }
+    if (personalExpenseCount > 0) {
+      console.log(`  👤 ${personalExpenseCount} suspicious personal expense(s) detected`);
+    }
+    
+    const totalLineItems = lineItemsArray.reduce((sum, item) => sum + item.lineItems.length, 0);
+    if (totalLineItems > 0) {
+      console.log(`  📋 ${totalLineItems} total line items extracted across all receipts`);
+    }
+    res.status(200).json(responseData);
     
   } catch (error) {
     console.error('Server error:', error);

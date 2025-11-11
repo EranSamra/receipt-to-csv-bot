@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate OG Image</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 1200px;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        #preview {
+            margin: 20px 0;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        .instructions h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .instructions code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧾 Generate Open Graph Image</h1>
+        <p>Click the button below to generate and download your OG image (1200x630px).</p>
+        
+        <button onclick="generateOGImage()">Generate & Download OG Image</button>
+        
+        <div id="preview"></div>
+        
+        <div class="instructions">
+            <h2>📋 Instructions:</h2>
+            <ol>
+                <li>Click the "Generate & Download OG Image" button above</li>
+                <li>The image will automatically download as <code>og-image.png</code></li>
+                <li>Move the downloaded file to the <code>public/</code> folder in your project</li>
+                <li>The image will be used for social media previews (Facebook, Twitter, LinkedIn, etc.)</li>
+            </ol>
+            <p><strong>Note:</strong> The image is 1200x630 pixels, which is the recommended size for Open Graph images.</p>
+        </div>
+    </div>
+
+    <script>
+        function generateOGImage() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1200;
+            canvas.height = 630;
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 1200, 630);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 1200, 630);
+            
+            // Add subtle pattern
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            for (let i = 0; i < 1200; i += 50) {
+                for (let j = 0; j < 630; j += 50) {
+                    ctx.beginPath();
+                    ctx.arc(i, j, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // Main title
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 72px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🧾 Receipt Data Extractor', 600, 200);
+            
+            // Subtitle
+            ctx.font = '300 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillText('AI-Powered Expense Processing', 600, 280);
+            
+            // Description
+            ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            const description = 'Upload your receipts and instantly convert them into structured expense data';
+            ctx.fillText(description, 600, 380);
+            ctx.fillText('Accurate. Secure. Built for Finance Teams.', 600, 420);
+            
+            // Convert canvas to image and download
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'og-image.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // Show preview
+                const img = document.createElement('img');
+                img.src = canvas.toDataURL('image/png');
+                img.style.width = '100%';
+                img.style.maxWidth = '1200px';
+                img.style.height = 'auto';
+                img.style.borderRadius = '8px';
+                document.getElementById('preview').innerHTML = '<h3>Preview:</h3>';
+                document.getElementById('preview').appendChild(img);
+            }, 'image/png');
+        }
+    </script>
+</body>
+</html>
