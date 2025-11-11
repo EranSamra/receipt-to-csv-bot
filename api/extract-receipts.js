@@ -5,10 +5,11 @@ function encodeBase64(buffer) {
 
 // Helper function to convert JSON receipt to CSV row
 function jsonToCSVRow(receipt, receiptIdMap = {}) {
-  // Map fraud risk from confidence
+  // Map fraud risk from confidence - support both suspicious_fraude and suspicious_fraud_risk for backward compatibility
   let fraudRisk = 'Low';
-  if (receipt.flags && receipt.flags.suspicious_fraud_risk && receipt.flags.suspicious_fraud_risk.value === true) {
-    const conf = receipt.flags.suspicious_fraud_risk.confidence || 0;
+  const fraudFlag = receipt.flags?.suspicious_fraude || receipt.flags?.suspicious_fraud_risk;
+  if (fraudFlag && fraudFlag.value === true) {
+    const conf = fraudFlag.confidence || 0;
     if (conf >= 0.75) fraudRisk = 'High';
     else if (conf >= 0.6) fraudRisk = 'Medium';
   }
@@ -176,154 +177,86 @@ export default async function handler(req, res) {
             contents: [{
               parts: [
                 { 
-                  text: `SYSTEM: You are a deterministic receipt extraction and policy classification engine for enterprise expense management. Extract fields, classify fraud and policy risks, then return a single JSON array of receipt objects. Be conservative when flagging. Provide evidence for every non-empty flag. Return JSON only, no extra text.
-
-TASK: Extract and classify the following receipt image or OCR text. Follow the schema and rules exactly.
-
-STRICT OUTPUT CONTRACT:
-
-Return a single top-level JSON array
-
-Each element must match the schema exactly, no extra keys
-
-Use a decimal point for numbers
-
-Dates are YYYY-MM-DD
-
-If a field is unknown, use an empty string for strings or null where allowed
-
-Never fabricate invoice_number
+                  text: `SYSTEM: You are a deterministic receipt extraction and classification engine for enterprise expense management. You must extract fields, classify receipts for fraud and policy violations, and return a single structured JSON object per receipt. Be conservative when deciding to flag. Provide evidence for every non-empty flag. Return JSON only. Do not include commentary or extra text.
 
 OUTPUT SCHEMA:
-Each array element is an object with exactly these keys and order:
 
-receipt_id: string, generate as "${file.filename}-${Date.now()}"
-invoice_number: string, from the document only, never invent, empty if none
-date: string, YYYY-MM-DD or empty
-amount: number, final paid amount, negative for refunds
-currency: string, ISO 4217 uppercase or empty
-merchant: string, normalized brand name
-transaction_type: string, one of Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other
+Return a JSON array where each element is an object with exactly these keys:
+
+receipt_id: string (unique id provided by caller or generated from file name and timestamp)
+date: string (YYYY-MM-DD or empty)
+amount: number (final paid amount, positive for charges, negative for refunds)
+currency: string (ISO 4217 uppercase or empty)
+merchant: string (normalized merchant name)
+transaction_type: string (one of: Card, Cash, Wire, Transfer, Invoice, Refund, Credit, Debit, Other)
 
 flags: object with keys:
-  suspicious_fraud_risk: { value: true|false, confidence: 0-1, evidence: [strings] }
+  suspicious_fraude: { value: true|false, confidence: 0-1, evidence: [strings] }
   duplicate: { value: true|false, confidence: 0-1, evidence: [strings], duplicate_of: receipt_id|null }
-  unauthorized_category: { value: true|false, confidence: 0-1, categories: [strings], evidence: [strings] } // allowed categories: Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other
-  suspicious_personal: { value: true|false, confidence: 0-1, evidence: [strings], vendor_match: [strings] }
+  unauthorized_category: { value: true|false, confidence: 0-1, categories: [strings], evidence: [strings] } // categories: Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other
+  suspicious_personal: { value: true|false, confidence: 0-1, evidence: [strings], vendor_match: [strings] } // vendor_match: list of matched personal-brand tokens
 
-confidence_overall: number, 0-1
-notes: string, short machine readable note if needed
-line_items: array optional, include only if the document contains multiple distinct items
-
-Each item: { description: string, date: string YYYY-MM-DD or empty, amount: number, category: "Food"|"Beverage"|"Alcohol"|"Tobacco"|"Service"|"Tax"|"Tip"|"Other" }
+confidence_overall: number (0-1)
+notes: string (short machine readable summary if needed)
 
 PRIMARY EXTRACTION RULES:
 
-Date: prefer payment or settlement date, if only month and year, use first day of that month, normalize to YYYY-MM-DD
-
-Amount: use the final Total or Amount paid, do not recompute when a final total exists, strip symbols and thousands separators
-
-Currency: map symbol to ISO code when clear, otherwise empty
-
-Merchant: remove legal suffixes such as Inc, Ltd, LLC, GmbH, prefer the visible brand
-
-Transaction type: if a card brand or last 4 appears, set Card, for refunds, set Refund and make the amount negative
+Date: Use payment/settlement date if available. Normalize to YYYY-MM-DD. If only month-year, use first day of month.
+Amount: Use final "Total" amount. Strip symbols and thousand separators. Keep decimal point. Negative for refunds.
+Currency: Map symbol to ISO code when possible. Leave empty if unknown.
+Merchant: Normalize by removing legal suffixes like Inc, Ltd, LLC, GmbH. Prefer brand name on top of receipt.
 
 FLAGGING RULES:
 
-suspicious_fraud_risk:
+suspicious_fraude: flag as true when one or more of the following conditions are met with supporting evidence:
+- Visual/metadata anomalies: Image metadata missing or clearly generated (no camera EXIF), pixel patterns typical of image synthesis, OCR text inconsistent with typical receipt layouts, font mismatches, receipt image contains obvious artifacts of compositing
+- Content anomalies: Order numbers/invoice numbers/tax IDs that do not match known formats, totals that do not match item sums, merchant name not found in business directories
+- Behavioral anomalies: Extremely short upload-to-extract time with exact synthetic-like pixels
+Evidence examples: "no-exif", "synthetic-font-pattern", "impossible-invoice-format", "mismatch-total-lines"
+Require combined confidence >= 0.6 to mark as true.
 
-Set value true when combined confidence >= 0.6 with evidence. Otherwise false, but include any evidence found
+duplicate: flag as true if any of:
+- Exact image hash match (evidence: "image-hash-match")
+- Perceptual hash near-match within threshold (evidence: "phash-similarity:X")
+- OCR text similarity above threshold for merchant+date+amount (evidence: "ocr-similarity:XX%")
+- Same merchant + same amount + same date within 1 day and near-identical payment instrument last4 (evidence: "merchant-amount-date-match")
+Include duplicate_of with the matched receipt id.
 
-Visual or metadata anomalies: no-exif, screenshot-metadata, generator-tag, layered-artifacts, cloned-patches, vector-font-pattern, uniform-kerning
+unauthorized_category: flag as true for forbidden categories (Alcohol, Tobacco, Gambling, Pharmaceuticals, Adult, Other)
+Use merchant name, line items, and OCR keywords to detect categories.
+Keyword examples:
+- Alcohol: wine, beer, liquor, bar, brew, vintner, cellar, vinos, vinoteca
+- Tobacco: cigarette, cigar, tobacco, vape, vape shop
+- Gambling: casino, sportsbook, bet, wager, slot, poker
+- Adult: onlyfans, porn, xxx, camming
+If multiple categories detected, list all.
 
-Content anomalies: impossible-invoice-format, invalid-tax-id, currency-mismatch, impossible-total, merchant-not-found, domain-mismatch:merchant/domain, phone-format-invalid
-
-Consistency anomalies: mismatch-total-lines, duplicated-line-items, subtotal-tax-mismatch without a valid discount or service line
-
-Behavioral indicators in a single file or batch: repeated-layout-pattern, multiple-receipts-perfectly-uniform
-
-duplicate:
-
-Scope is within the same image or batch only
-
-Set value true when any apply, include duplicate_of when available
-
-image-hash-match, exact duplicate in image or batch
-
-phash-similarity:X, perceptual near duplicate, Hamming distance threshold for near match
-
-ocr-similarity:XX, normalized similarity for merchant+date+amount above 95 percent
-
-merchant-amount-date-match, same merchant, amount, date within 1 day and near-identical card last4
-
-same-invoice-number, the same invoice_number appears again in the same image or batch
-
-If only one receipt is processed in this call, set duplicate.value false
-
-unauthorized_category:
-
-Set value true when merchant or line items indicate forbidden categories
-
-Keyword anchors
-
-Alcohol: wine, beer, liquor, bar, brewery, pub, spirits
-
-Tobacco: cigarette, cigar, tobacco, vape, vaping
-
-Gambling: casino, sportsbook, bet, wager, slot, poker, roulette
-
-Adult: onlyfans, porn, xxx, cam, adult store, strip club
-
-Pharmaceuticals: pharmacy, prescription, rx, medication
-
-Evidence strings must reference tokens found, for example line-item:beer, merchant-token:pub, vendor-token:OnlyFans
-
-suspicious_personal:
-
-Recognize clear personal spend, including brands like OnlyFans, Zara, H&M, Victoria's Secret, Sephora, Shein, Temu, Netflix, Spotify, Apple App Store, Google Play, Uber Eats, Deliveroo, DoorDash, Steam, Epic Games
-
-Heuristics
-
-Exact vendor token in merchant, domain, or receipt header, high confidence
-
-Line items strongly personal without business context, medium confidence
-
-Generic marketplaces require item evidence, lower confidence
-
-Evidence examples: vendor-token:Zara, merchant-domain:onlyfans.com, line-item:subscription, line-item:cosmetics
+suspicious_personal: flag as true when merchant or line items indicate clear personal spend
+Vendor whitelist examples: OnlyFans, Zara, H&M, Victoria's Secret, Sephora, Netflix, Spotify, Apple Store (personal electronics may be allowed per policy)
+Match heuristics:
+- Exact vendor token match in merchant or OCR text -> high confidence
+- Merchant appears in known personal brand list -> high confidence
+- If line items include clothing, cosmetics, subscription services and merchant is general retailer -> lower confidence
+Evidence examples: "vendor-token:OnlyFans", "line-item:subscription", "merchant-domain:onlyfans.com"
 
 EVIDENCE FORMAT:
-
-Short tokens or token:value pairs only
-
-Examples: no-exif, image-hash-match, phash-similarity:4, ocr-similarity:97, vendor-token:OnlyFans, line-item:beer, domain-mismatch:merchant/domain, impossible-total, phone-format-invalid, invalid-tax-id:GB
+Every evidence entry must be a short token or phrase using hyphen separated words, for example:
+- "no-exif"
+- "image-hash-match"
+- "phash-similarity:4"
+- "ocr-similarity:97"
+- "vendor-token:OnlyFans"
+- "line-item:beer"
+- "domain-mismatch:merchant/domain"
+- "impossible-total"
 
 ACTIONABLE OUTPUTS:
+- If suspicious_fraude.value === true and confidence >= 0.75, include in notes: "Hold for manual review - potential AI-generated receipt"
+- If duplicate.value === true and confidence >= 0.9, include in notes: "Auto-reject duplicate" or include duplicate_of id for de-dupe pipeline
+- If unauthorized_category.value === true and categories includes Gambling or Alcohol and confidence >= 0.7, notes: "Flag for policy violation - require approver"
+- If suspicious_personal.value === true and confidence >= 0.7, notes: "Flag as personal expense"
 
-If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Hold for manual review, potential AI generated receipt"
-
-If duplicate.value true and confidence >= 0.9, notes = "Auto reject duplicate", include duplicate_of
-
-If unauthorized_category.value true and categories contains Alcohol or Gambling and confidence >= 0.7, notes = "Flag for policy violation, require approver"
-
-If suspicious_personal.value true and confidence >= 0.7, notes = "Flag as personal expense"
-
-LINE ITEM EXTRACTION:
-
-Include line_items only when multiple distinct items are present, do not add an empty array
-
-Each item must have description and amount, add category if clear
-
-ROBUSTNESS RULES:
-
-Never fabricate invoice_number
-
-If totals conflict, prefer the final Total or Amount paid, then add mismatch-total-lines to evidence
-
-If merchant appears as a domain or email, normalize to brand when obvious and add merchant-domain:brand.tld to evidence
-
-If OCR is low confidence, leave unreadable fields empty` 
+Return JSON only. Do not include explanations, code fences, or extra text.` 
                   },
                   { inline_data: { mime_type: file.mimetype || 'application/pdf', data: base64 } }
                 ]
