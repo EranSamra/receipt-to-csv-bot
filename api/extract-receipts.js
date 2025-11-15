@@ -292,10 +292,10 @@ CONFIDENCE SCORING:
 
 Calculate cumulative score from detected indicators:
 - Score = sum of all indicator weights
-- 0.0-0.3: Low confidence → Don't flag
-- 0.3-0.6: Uncertain → Don't flag, but include evidence
-- 0.6-0.8: High confidence → Flag with manual review
-- 0.8+: Very high confidence → Likely AI-generated
+- 0.0-0.3: Low confidence - Don't flag
+- 0.3-0.6: Uncertain - Don't flag, but include evidence
+- 0.6-0.8: High confidence - Flag with manual review
+- 0.8+: Very high confidence - Likely AI-generated
 
 REQUIRED EVIDENCE QUALITY:
 
