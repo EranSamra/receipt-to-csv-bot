@@ -34,8 +34,8 @@ const exampleReceipts: ExampleReceipt[] = [
   },
   {
     id: "whataburger-receipt",
-    name: "Whataburger Receipt",
-    description: "Fast food restaurant receipt with modifications",
+    name: "Alcohol Receipt",
+    description: "Liquor store receipt with alcohol purchases",
     filename: "whataburger-receipt.png",
     thumbnail: "/sample-receipts/whataburger-receipt.png"
   },

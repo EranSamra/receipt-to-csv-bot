@@ -12,7 +12,10 @@ import { ParticleTextEffect } from "@/components/ui/particle-text-effect";
 import { logMobileFileInfo, logMobileFetchInfo, logMobileError, detectMobileDevice } from "@/utils/mobileDebug";
 import InvoiceScanModal from "@/components/InvoiceScanModal";
 import MeshReceiptScanner from "@/components/MeshReceiptScanner";
-import { LeadGate } from "@/components/LeadGate";
+import { SendCSVModal } from "@/components/SendCSVModal";
+import { compressImageIfNeeded } from "@/utils/imageCompression";
+import { MeshHeroCTA } from "@/components/MeshHeroCTA";
+import { convertPDFToImage } from "@/utils/pdfConverter";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -28,33 +31,29 @@ const Index = () => {
   const [showExamplesModal, setShowExamplesModal] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
   const [showMeshScanner, setShowMeshScanner] = useState(false);
-  const [showLeadGate, setShowLeadGate] = useState(false);
-  const [leadCaptured, setLeadCaptured] = useState(false);
+  const [showSendCSVModal, setShowSendCSVModal] = useState(false);
   const { toast } = useToast();
-
-  // Check if lead was already captured
-  useEffect(() => {
-    const captured = localStorage.getItem('lead_captured') === '1';
-    setLeadCaptured(captured);
-  }, []);
 
   // Trigger animations on mount
   useEffect(() => {
     setAnimateHero(true);
   }, []);
 
-  // Auto-scroll to results when extraction completes
+  // Auto-scroll to output section when extraction completes
   useEffect(() => {
     if (showResults && results.length > 0) {
+      // Wait for scanner to close and DOM to update before scrolling
       setTimeout(() => {
-        const resultsSection = document.getElementById('results-section');
-        if (resultsSection) {
-          resultsSection.scrollIntoView({ 
+        const outputSection = document.getElementById('output-section');
+        if (outputSection) {
+          // Scroll to output section with smooth behavior
+          outputSection.scrollIntoView({ 
             behavior: 'smooth', 
-            block: 'start' 
+            block: 'start',
+            inline: 'nearest'
           });
         }
-      }, 500); // Small delay to allow animation to complete
+      }, 800); // Delay to ensure scanner is closed and results are rendered
     }
   }, [showResults, results]);
 
@@ -140,8 +139,74 @@ const Index = () => {
   // Extract receipt function for MeshReceiptScanner
   const extractReceiptFn = async (file: File): Promise<{ ok: boolean; data?: any }> => {
     try {
+      let fileToProcess = file;
+      
+      // Convert PDF to image if needed
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        console.log(`[Index] 📄 Detected PDF file: ${file.name} (${(file.size / 1024).toFixed(1)}KB)`);
+        console.log(`[Index] Converting PDF to image...`);
+        
+        try {
+          // Add timeout for PDF conversion (30 seconds)
+          const conversionPromise = convertPDFToImage(file, 'image/jpeg', 0.9);
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('PDF conversion timeout after 30 seconds')), 30000)
+          );
+          
+          fileToProcess = await Promise.race([conversionPromise, timeoutPromise]);
+          
+          console.log(`[Index] ✅ PDF converted successfully: ${file.name} -> ${fileToProcess.name}`);
+          console.log(`[Index] Converted file details: type=${fileToProcess.type}, size=${(fileToProcess.size / 1024).toFixed(1)}KB`);
+          
+          // Verify the converted file is valid
+          if (!fileToProcess || fileToProcess.size === 0) {
+            throw new Error('Converted file is empty');
+          }
+          
+          if (!fileToProcess.type.startsWith('image/')) {
+            throw new Error(`Converted file has invalid type: ${fileToProcess.type}`);
+          }
+        } catch (conversionError) {
+          console.error(`[Index] ❌ PDF conversion failed for ${file.name}:`, conversionError);
+          
+          const errorMessage = conversionError instanceof Error 
+            ? conversionError.message 
+            : 'Unknown conversion error';
+          
+          // Check if it's a timeout or critical error
+          if (errorMessage.includes('timeout')) {
+            throw new Error(`PDF conversion timed out. The PDF file may be too large or corrupted. Please try a smaller PDF or convert it to an image manually.`);
+          }
+          
+          // Check if it's a worker/network issue
+          if (errorMessage.includes('worker') || errorMessage.includes('connection')) {
+            throw new Error(`PDF conversion failed: ${errorMessage}. Please check your internet connection and try again.`);
+          }
+          
+          // For other errors, try fallback to PDF directly
+          console.warn(`[Index] ⚠️ Attempting fallback: sending PDF directly to API (Gemini may support PDFs)...`);
+          fileToProcess = file;
+          console.warn(`[Index] ⚠️ PDF conversion failed (${errorMessage}), but continuing with PDF file directly. API may support PDF format.`);
+        }
+      }
+      
+      // Compress image if it's too large (over 1MB)
+      const fileSizeMB = fileToProcess.size / (1024 * 1024);
+      
+      if (fileSizeMB > 1 && fileToProcess.type.startsWith('image/')) {
+        console.log(`[Index] Compressing ${fileToProcess.name} (${fileSizeMB.toFixed(2)}MB)...`);
+        try {
+          fileToProcess = await compressImageIfNeeded(fileToProcess, 1000); // 1000KB = ~1MB
+          const compressedSizeMB = fileToProcess.size / (1024 * 1024);
+          console.log(`[Index] Compressed ${fileToProcess.name} from ${fileSizeMB.toFixed(2)}MB to ${compressedSizeMB.toFixed(2)}MB`);
+        } catch (compressionError) {
+          console.warn(`[Index] Compression failed for ${fileToProcess.name}, using original file:`, compressionError);
+          // Continue with original file if compression fails
+        }
+      }
+
       const formData = new FormData();
-      formData.append('files', file);
+      formData.append('files', fileToProcess);
 
       // Environment-based API URL
       const API_URL = import.meta.env.DEV 
@@ -190,7 +255,7 @@ const Index = () => {
     }
   };
 
-  const handleScanComplete = (results: any[]) => {
+  const handleScanComplete = async (results: any[], fileIndices?: number[]) => {
     // Combine all results
     const allResults = results.filter(r => r !== null && r !== undefined);
     
@@ -215,64 +280,130 @@ const Index = () => {
     const imagesMap = new Map<string, string>();
     
     // Create blob URLs for ALL files immediately to ensure they persist
+    // IMPORTANT: For PDFs, convert them to images first so they can be displayed
     // Store them in a map that won't be affected by scanner cleanup
     const fileBlobUrls = new Map<number, string>();
-    selectedFiles.forEach((file, index) => {
-      // Create blob URL immediately - these will persist even after scanner closes
-      fileBlobUrls.set(index, URL.createObjectURL(file));
-    });
     
-    // Map receipts to files: process all receipts and assign them to files
-    // Since MeshReceiptScanner processes files sequentially and returns results in order,
-    // we match receipts to files by index (one receipt per file, or multiple receipts from same file)
-    let fileIndex = 0;
+    // Process files and convert PDFs to images for preview
+    const processFilesForPreview = async () => {
+      for (let index = 0; index < selectedFiles.length; index++) {
+        const file = selectedFiles[index];
+        let fileForPreview = file;
+        
+        // If PDF, convert to image for preview
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          try {
+            console.log(`[Index] Converting PDF ${file.name} to image for preview...`);
+            fileForPreview = await convertPDFToImage(file, 'image/jpeg', 0.8);
+            console.log(`[Index] ✅ PDF converted for preview: ${file.name} -> ${fileForPreview.name}`);
+          } catch (error) {
+            console.error(`[Index] Failed to convert PDF for preview, using original:`, error);
+            // Use original file if conversion fails (won't display but won't crash)
+            fileForPreview = file;
+          }
+        }
+        
+        // Create blob URL from the file (converted image for PDFs, original for images)
+        fileBlobUrls.set(index, URL.createObjectURL(fileForPreview));
+      }
+    };
     
+    await processFilesForPreview();
+    
+    // Map receipts to files using file indices from scanner
+    // This ensures correct mapping even when some files fail to extract
     for (let receiptIndex = 0; receiptIndex < allResults.length; receiptIndex++) {
       const receipt = allResults[receiptIndex];
       const invoiceNumber = receipt["Invoice Number"] || '';
       
-      // Get blob URL for current file (or reuse if we've run out of files)
-      let blobUrl: string;
-      if (fileIndex < fileBlobUrls.size) {
-        blobUrl = fileBlobUrls.get(fileIndex)!;
-        // Move to next file after using this one (assumes one receipt per file)
-        // If a file produces multiple receipts, they'll reuse the same blob URL
-        fileIndex++;
+      // Get the file index for this receipt
+      let fileIndex: number;
+      if (fileIndices && fileIndices[receiptIndex] !== undefined) {
+        // Use file index from scanner (correct mapping even if files failed)
+        fileIndex = fileIndices[receiptIndex];
+        console.log(`[Index] Receipt ${receiptIndex} mapped to file index ${fileIndex} (from scanner)`);
       } else {
-        // More receipts than files - reuse last file's blob URL
-        // This handles cases where a single file produces multiple receipts
+        // Fallback: sequential mapping (shouldn't happen, but safe fallback)
+        fileIndex = receiptIndex;
+        console.warn(`[Index] No file index provided for receipt ${receiptIndex}, using sequential mapping as fallback`);
+      }
+      
+      // Get blob URL for the file
+      let blobUrl: string;
+      if (fileIndex < fileBlobUrls.size && fileIndex >= 0) {
+        blobUrl = fileBlobUrls.get(fileIndex)!;
+        console.log(`[Index] Using blob URL from file index ${fileIndex} for receipt ${receiptIndex}`);
+      } else {
+        // Fallback: use last file's blob URL if index is out of bounds
+        console.warn(`[Index] File index ${fileIndex} out of bounds, using last file's blob URL`);
         blobUrl = fileBlobUrls.get(fileBlobUrls.size - 1)!;
       }
       
       // Map this receipt to the blob URL
       if (invoiceNumber) {
         imagesMap.set(invoiceNumber, blobUrl);
+        console.log(`[Index] Mapped receipt with invoice ${invoiceNumber} to file index ${fileIndex}`);
       } else {
         // Use index-based key if no invoice number
         imagesMap.set(`receipt-${receiptIndex}`, blobUrl);
+        console.log(`[Index] Mapped receipt ${receiptIndex} (no invoice) to file index ${fileIndex}`);
       }
     }
     
     console.log(`[Index] Created ${imagesMap.size} image mappings from ${fileBlobUrls.size} files for ${allResults.length} receipts`);
 
+    // DUPLICATE DETECTION: Check within this session's results
+    console.log(`[Index] Running duplicate detection on ${allResults.length} receipts...`);
+    const seen = new Map(); // merchant|date|amount -> index
+    const seenByInvoice = new Map(); // invoice number -> index
+    
+    for (let i = 0; i < allResults.length; i++) {
+      const receipt = allResults[i];
+      
+      // Method 1: Check by invoice number (strongest signal)
+      const invoiceNumber = receipt["Invoice Number"]?.trim();
+      if (invoiceNumber) {
+        if (seenByInvoice.has(invoiceNumber)) {
+          const firstIndex = seenByInvoice.get(invoiceNumber);
+          allResults[firstIndex]["Duplicate"] = "Yes";
+          receipt["Duplicate"] = "Yes";
+          console.log(`✓ Duplicate found by invoice: #${invoiceNumber} (receipts ${firstIndex} and ${i})`);
+        } else {
+          seenByInvoice.set(invoiceNumber, i);
+        }
+      }
+      
+      // Method 2: Check by merchant + date + amount (normalized)
+      const merchant = (receipt["Merchant"] || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const date = (receipt["Date"] || '').trim();
+      const amountStr = (receipt["Amount"] || '').toString().trim();
+      const amount = parseFloat(amountStr.replace(/[^\d.-]/g, '')) || 0;
+      const normalizedAmount = amount.toFixed(2);
+      
+      const key = `${merchant}|${date}|${normalizedAmount}`;
+      
+      if (merchant && date && amount > 0) {
+        if (seen.has(key)) {
+          const firstIndex = seen.get(key);
+          allResults[firstIndex]["Duplicate"] = "Yes";
+          receipt["Duplicate"] = "Yes";
+          console.log(`✓ Duplicate found by merchant+date+amount: ${merchant} on ${date} for $${normalizedAmount} (receipts ${firstIndex} and ${i})`);
+        } else {
+          seen.set(key, i);
+        }
+      }
+    }
+    
+    const duplicateCount = allResults.filter(r => r["Duplicate"] === "Yes").length;
+    console.log(`[Index] Duplicate detection complete: ${duplicateCount} duplicate(s) found in ${allResults.length} receipts`);
+
     // IMPORTANT: Set results and images BEFORE closing scanner to prevent cleanup issues
     console.log(`[Index] Setting ${allResults.length} results, ${imagesMap.size} image mappings`);
     setReceiptImagesMap(imagesMap);
     setResults(allResults); // Use direct setResults here since we're intentionally setting new results
+    setShowResults(true);
+    setShowConfetti(true);
     setIsProcessing(false);
-    
-    // Check if lead was captured - if not, show gate first
-    const captured = localStorage.getItem('lead_captured') === '1';
-    if (captured) {
-      // Already captured, show results immediately
-      setShowResults(true);
-      setShowConfetti(true);
-    } else {
-      // Not captured, show lead gate first (but still set results so they're ready)
-      setShowResults(true); // Set results so they're ready to show after form submission
-      setShowLeadGate(true);
-      setShowConfetti(true);
-    }
     
     // Verify results are set correctly
     setTimeout(() => {
@@ -284,6 +415,18 @@ const Index = () => {
     setTimeout(() => {
       setShowMeshScanner(false);
       console.log(`[Index] Scanner closed, results should persist: ${allResults.length} receipts`);
+      
+      // Scroll to output section after scanner closes
+      setTimeout(() => {
+        const outputSection = document.getElementById('output-section');
+        if (outputSection) {
+          outputSection.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start',
+            inline: 'nearest'
+          });
+        }
+      }, 300); // Small delay after scanner closes to ensure DOM is updated
     }, 200);
     
     // Hide confetti after animation (this should NOT affect results)
@@ -831,63 +974,55 @@ const Index = () => {
         </div>
       </section>
 
-      {/* Lead Gate Modal */}
-      <LeadGate
-        isOpen={showLeadGate}
-        onClose={() => {
-          // User closed without submitting - still show results but mark as dismissed
-          setShowLeadGate(false);
-          setShowResults(true);
-        }}
-        onFormSubmitted={() => {
-          // Form submitted - show results
-          setLeadCaptured(true);
-          setShowResults(true);
-        }}
-      />
-
       {/* Results Section */}
       {showResults && results.length > 0 && (
-        <section 
-          id="results-section" 
-          className="py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden"
-        >
-          {/* Background decoration */}
-          <div className="absolute inset-0 opacity-5">
-            <div className="absolute top-10 right-10 w-32 h-32 bg-turquoise-500 rounded-full mix-blend-multiply filter blur-xl"></div>
-            <div className="absolute bottom-10 left-10 w-24 h-24 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl"></div>
-          </div>
-          
-          <div className="container mx-auto px-4 relative">
-            <div className="max-w-6xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6">
-                  🎉 Extracted Receipt Data
-                </h2>
-                <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-                  Your receipts have been successfully processed and structured using Mesh AI
-                </p>
-                <div className="flex justify-center">
-                  <Button
-                    onClick={handleDownloadCSV}
-                    className="bg-gradient-to-r from-turquoise-500 to-turquoise-600 hover:from-turquoise-600 hover:to-turquoise-700 text-white text-lg px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                  >
-                    <CheckCircle className="h-6 w-6 mr-3" />
-                    Download CSV
-                  </Button>
-                </div>
-              </div>
+        <>
+          <section className="py-20 bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute inset-0 opacity-5">
+              <div className="absolute top-10 right-10 w-32 h-32 bg-turquoise-500 rounded-full mix-blend-multiply filter blur-xl"></div>
+              <div className="absolute bottom-10 left-10 w-24 h-24 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl"></div>
+            </div>
+            
+            <div className="container mx-auto px-4 relative">
+              <div className="max-w-6xl mx-auto">
+                {/* Receipt Extraction Output Section */}
+                <div id="output-section">
+                  <div className="text-center mb-12">
+                    <h2 className="text-4xl md:text-5xl font-bold text-gray-800 mb-6">
+                      🎉 Extracted Receipt Data
+                    </h2>
+                    <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
+                      Your receipts have been successfully processed and structured using Mesh AI
+                    </p>
+                    <div className="flex justify-center">
+                      <Button
+                        onClick={() => setShowSendCSVModal(true)}
+                        className="bg-gradient-to-r from-turquoise-500 to-turquoise-600 hover:from-turquoise-600 hover:to-turquoise-700 text-white text-lg px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
+                      >
+                        <CheckCircle className="h-6 w-6 mr-3" />
+                        Send CSV to my work email
+                      </Button>
+                    </div>
+                  </div>
 
-              <div className="mesh-card p-8 mesh-shadow-xl border-2 border-turquoise-100">
-                <div className="mb-8">
-                  <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Expense Data</h3>
-                  <p className="text-base md:text-lg text-gray-600">{results.length} receipt{results.length > 1 ? 's' : ''} processed successfully</p>
+                  <div className="mesh-card p-8 mesh-shadow-xl border-2 border-turquoise-100">
+                    <div className="mb-8">
+                      <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Expense Data</h3>
+                      <p className="text-base md:text-lg text-gray-600">{results.length} receipt{results.length > 1 ? 's' : ''} processed successfully</p>
+                    </div>
+                    <ResultsTable data={results} receiptImages={receiptImagesMap} />
+                  </div>
                 </div>
-                <ResultsTable data={results} receiptImages={receiptImagesMap} />
               </div>
             </div>
+          </section>
+
+          {/* Mesh Hero CTA Section */}
+          <div className="container mx-auto px-4">
+            <MeshHeroCTA />
           </div>
-        </section>
+        </>
       )}
 
       {/* Footer */}
@@ -920,6 +1055,13 @@ const Index = () => {
           </div>
         </div>
       )}
+
+      {/* Send CSV Modal */}
+      <SendCSVModal
+        isOpen={showSendCSVModal}
+        onClose={() => setShowSendCSVModal(false)}
+        extractedRows={results}
+      />
     </div>
   );
 };

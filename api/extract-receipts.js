@@ -244,15 +244,76 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-Set value true when combined confidence >= 0.6 with evidence. Otherwise false, but include any evidence found
+DETECTION FRAMEWORK: Multi-factor analysis for AI-generated receipts. Flag as true when combined confidence >= 0.6. Use cumulative evidence scoring.
 
-Visual or metadata anomalies: no-exif, screenshot-metadata, generator-tag, layered-artifacts, cloned-patches, vector-font-pattern, uniform-kerning
+CATEGORY 1: AI GENERATION SIGNATURES (High Weight: +0.35 each)
 
-Content anomalies: impossible-invoice-format, invalid-tax-id, currency-mismatch, impossible-total, merchant-not-found, domain-mismatch:merchant/domain, phone-format-invalid
+- "ai-perfect-symmetry" - Unnaturally perfect alignment, pixel-perfect spacing
+- "synthetic-texture" - Generated paper texture (uniform grain, repeated patterns)
+- "digital-native" - Pure digital generation (perfect white background, no shadows, vector-sharp edges)
+- "ai-font-rendering" - Text artifacts typical of AI (synthetic kerning, mathematical spacing)
+- "stable-diffusion-artifacts" - Repeated micro-structures, gaussian halos, edge coherence issues
+- "prompt-leakage" - Text fragments like "Generate receipt", "Create invoice"
+- "chatgpt-format" - Markdown syntax, code formatting in receipt text
+- "watermark-traces" - Faint AI service watermarks even if partially removed
 
-Consistency anomalies: mismatch-total-lines, duplicated-line-items, subtotal-tax-mismatch without a valid discount or service line
+CATEGORY 2: METADATA RED FLAGS (High Weight: +0.35 each)
 
-Behavioral indicators in a single file or batch: repeated-layout-pattern, multiple-receipts-perfectly-uniform
+- "generator-metadata" - File contains: "Adobe Firefly", "Midjourney", "DALL-E", "Stable Diffusion", "Canva AI", "Photoshop Generative"
+- "no-camera-exif" - Missing camera EXIF (Make, Model, DateTimeOriginal) when claiming to be photo
+- "screenshot-only" - Screenshot metadata + resolution matches screens (1920x1080, 1366x768, 2560x1440)
+
+CATEGORY 3: VISUAL ARTIFACTS (Medium Weight: +0.25 each)
+
+- "impossible-lighting" - Lighting inconsistent with retail environment
+- "vector-in-thermal" - Vector-quality elements in thermal receipt
+- "layered-compositing" - Evidence of layer compositing (halos, misaligned elements)
+- "synthetic-noise" - Algorithmic noise vs organic camera noise
+- "too-perfect-ocr" - All text perfectly readable (real receipts have smudges, fading)
+
+CATEGORY 4: CONTENT IMPOSSIBILITIES (Medium Weight: +0.25 each)
+
+- "impossible-invoice-format" - Invoice number wrong format (test patterns: "INV-00001", "TEST-123")
+- "merchant-not-found" - Merchant doesn't exist in business registries
+- "test-data" - Names like "Test Store", "Sample Restaurant", "Lorem Ipsum"
+- "generic-items" - Line items: "Item 1", "Product A", "Service"
+- "tax-error" - Tax calculation impossible for jurisdiction
+- "impossible-total" - Math doesn't add up (>$0.05 difference)
+- "currency-location-mismatch" - USD in Europe-only merchant, GBP in US-only chain
+
+CATEGORY 5: PATTERN ANOMALIES (Low Weight: +0.15 each)
+
+- "round-numbers-only" - All amounts are round ($10, $25, $50)
+- "font-inconsistency" - Multiple fonts in single-font medium (thermal)
+- "impossible-thermal" - Color/gradients in thermal receipt
+- "qr-fake" - QR code doesn't scan or contains test data
+
+CONFIDENCE SCORING:
+
+Calculate cumulative score from detected indicators:
+- Score = sum of all indicator weights
+- 0.0-0.3: Low confidence → Don't flag
+- 0.3-0.6: Uncertain → Don't flag, but include evidence
+- 0.6-0.8: High confidence → Flag with manual review
+- 0.8+: Very high confidence → Likely AI-generated
+
+REQUIRED EVIDENCE QUALITY:
+
+- Minimum 2 different indicators to flag
+- Prefer combining visual + content evidence
+- Single weak indicator (only no-exif) = insufficient
+- Multiple corroborating indicators = higher confidence
+
+GEMINI VISION ANALYSIS:
+
+As a vision model, analyze pixel-level patterns:
+- Compression artifacts: Real vs AI compression patterns
+- Color histograms: Natural vs synthetic distributions
+- Edge detection: Real photo edges vs AI-rendered edges
+- Noise patterns: Camera sensor noise vs algorithmic noise
+- Texture analysis: Organic paper texture vs generated texture
+
+Use your vision capabilities to detect patterns invisible to OCR.
 
 duplicate:
 
@@ -312,7 +373,9 @@ Examples: no-exif, image-hash-match, phash-similarity:4, ocr-similarity:97, vend
 
 ACTIONABLE OUTPUTS:
 
-If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Hold for manual review, potential AI generated receipt"
+If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Suspicious Fraud (AI-Generated) - Hold for manual review"
+
+If suspicious_fraud_risk.value true and confidence 0.6-0.75, notes = "Suspicious Fraud (AI-Generated) - Verify authenticity"
 
 If duplicate.value true and confidence >= 0.9, notes = "Auto reject duplicate", include duplicate_of
 

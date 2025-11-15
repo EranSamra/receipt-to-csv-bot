@@ -3,6 +3,265 @@
 @tailwind components;
 @tailwind utilities;
 
+/* HubSpot Form Styles */
+.lead-card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+}
+
+.lead-title {
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-size: 2rem;           /* around 32px */
+  font-weight: 700;
+  color: #111827;            /* neutral dark gray */
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.lead-sub {
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-size: 1rem;           /* 16px */
+  color: #4B5563;            /* medium gray */
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.lead-trust {
+  font-size: 0.75rem;        /* 12px */
+  color: #6B7280;            /* light gray */
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+/* Form container */
+#hubspot-form form {
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  border: none !important;
+}
+
+#hubspot-form .hs-form {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Labels */
+#hubspot-form label {
+  font-weight: 500;
+  color: #111827;
+  font-size: 0.9rem;
+  margin: 6px 0 4px;
+  display: block;
+}
+
+/* Inputs */
+#hubspot-form input[type="text"],
+#hubspot-form input[type="email"],
+#hubspot-form textarea {
+  width: 100%;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease;
+  background: #fff;
+  color: #111827;
+}
+
+#hubspot-form input:focus,
+#hubspot-form textarea:focus {
+  border-color: #111827;
+  outline: none;
+}
+
+/* Checkboxes */
+#hubspot-form input[type="checkbox"] {
+  accent-color: #111827;
+}
+
+/* Privacy paragraphs */
+#hubspot-form p {
+  font-size: 0.8rem;
+  color: #6B7280;
+  line-height: 1.4;
+}
+
+#hubspot-form .hs-error-msgs {
+  font-size: 12px;
+  color: #dc2626;
+}
+
+/* Submit button */
+#hubspot-form input[type="submit"] {
+  width: 100%;
+  background-color: #111827;       /* Mesh dark gray / black */
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.25s ease;
+}
+
+#hubspot-form input[type="submit"]:hover {
+  background-color: #1F2937;       /* slightly lighter on hover */
+}
+
+.sticky-cta {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1000;
+  background: #111827;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sticky-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.sticky-cta.hidden {
+  display: none;
+}
+
+/* Send CSV Modal Styles */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 14px;
+  max-width: 440px;
+  width: 92%;
+  padding: 18px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.modal-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #111827;
+}
+
+.modal-sub {
+  margin: 0 0 12px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.field-input {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #111827;
+  transition: border-color 0.2s;
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: #111827;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-primary {
+  background: #111827;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-neutral {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #111827;
+  transition: background-color 0.2s;
+}
+
+.btn-neutral:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn-neutral:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.tiny-legal {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tiny-legal a {
+  color: #6b7280;
+  text-decoration: underline;
+}
+
 /* Mesh-Inspired Design System - Advanced Enterprise Aesthetic */
 /* Colors based on Mesh platform design: dark teal background with turquoise accents */
 
@@ -384,9 +643,154 @@
   background: hsl(var(--mesh-turquoise-light));
 }
 
-/* Lead Gate Styles - Blur page when gate is open */
-.lead-gated #root {
-  filter: blur(8px);
-  pointer-events: none;
-  user-select: none;
+/* Mesh Hero CTA Styles */
+:root {
+  --hero-bg: #0e2a33;
+  --hero-text: #e8f3f6;
+  --hero-muted: #a8c0c7;
+  --cta-bg: #aef4e6;
+  --cta-text: #0e2a33;
+  --input-bg: #ffffff;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.mesh-hero {
+  width: 100%;
+  background: var(--hero-bg);
+  color: var(--hero-text);
+  padding: 48px 24px;
+  border-radius: 16px;
+  margin-top: 24px;
+  overflow: hidden;
+}
+
+.mesh-hero__inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 32px;
+  align-items: center;
+}
+
+.mesh-hero__title {
+  margin: 0 0 16px;
+  font-size: clamp(32px, 4.5vw, 64px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.2px;
+}
+
+/* Pill form: full section style */
+.mesh-hero__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  background: var(--input-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.mesh-hero__form input {
+  border: 0;
+  padding: 16px 18px;
+  font-size: 16px;
+  color: #0f172a;
+  outline: none;
+}
+
+.mesh-hero__form input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mesh-hero__form button {
+  border: 0;
+  padding: 16px 22px;
+  font-weight: 700;
+  background: var(--cta-bg);
+  color: var(--cta-text);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.mesh-hero__form button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.mesh-hero__form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mesh-hero__msg {
+  min-height: 18px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--hero-muted);
+}
+
+/* Decorative right shapes */
+.mesh-hero__right {
+  position: relative;
+  height: 180px;
+}
+
+.mesh-hero .mesh-card {
+  position: absolute;
+  left: 60px;
+  top: 10px;
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #b2e3e9 0%, #5f8e99 60%, #33555f 100%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: rotate(-9deg);
+  opacity: 0.95;
+}
+
+.mesh-hero .mesh-card--2 {
+  left: 100px;
+  top: 20px;
+  transform: rotate(-9deg) translateX(15px);
+  opacity: 0.85;
+}
+
+.mesh-hero .mesh-card--3 {
+  left: 140px;
+  top: 30px;
+  transform: rotate(-9deg) translateX(30px);
+  opacity: 0.75;
+}
+
+@media (max-width: 960px) {
+  .mesh-hero__inner {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .mesh-hero__left {
+    order: -1;
+  }
+
+  .mesh-hero__right {
+    display: none;
+  }
+
+  .mesh-hero .mesh-card,
+  .mesh-hero .mesh-card--2,
+  .mesh-hero .mesh-card--3 {
+    width: 100px;
+    height: 100px;
+    left: 0;
+  }
+
+  .mesh-hero__form {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .mesh-hero__form button {
+    width: 100%;
+  }
 }

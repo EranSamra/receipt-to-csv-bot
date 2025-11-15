@@ -81,9 +81,9 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
             id="file-upload"
             type="file"
             multiple
-        accept="image/*,.pdf"
+            accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.pdf"
             onChange={handleFileInput}
-        ref={fileInputRef}
+            ref={fileInputRef}
             className="hidden"
           />
       {selectedFiles.length === 0 ? (
@@ -124,7 +124,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
 
             {/* File Count */}
             <p className="text-xs sm:text-sm text-gray-500 mt-4 sm:mt-6 px-2">
-              Up to 30 files • Supports JPG, PNG, WEBP, HEIC, PDF formats ((Max 1MB each))
+              Up to 30 files • Supports JPG, JPEG, PNG, WEBP, HEIC, PDF formats • Large images will be automatically compressed
           </p>
           </div>
         </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -194,15 +195,76 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-Set value true when combined confidence >= 0.6 with evidence. Otherwise false, but include any evidence found
+DETECTION FRAMEWORK: Multi-factor analysis for AI-generated receipts. Flag as true when combined confidence >= 0.6. Use cumulative evidence scoring.
 
-Visual or metadata anomalies: no-exif, screenshot-metadata, generator-tag, layered-artifacts, cloned-patches, vector-font-pattern, uniform-kerning
+CATEGORY 1: AI GENERATION SIGNATURES (High Weight: +0.35 each)
 
-Content anomalies: impossible-invoice-format, invalid-tax-id, currency-mismatch, impossible-total, merchant-not-found, domain-mismatch:merchant/domain, phone-format-invalid
+- "ai-perfect-symmetry" - Unnaturally perfect alignment, pixel-perfect spacing
+- "synthetic-texture" - Generated paper texture (uniform grain, repeated patterns)
+- "digital-native" - Pure digital generation (perfect white background, no shadows, vector-sharp edges)
+- "ai-font-rendering" - Text artifacts typical of AI (synthetic kerning, mathematical spacing)
+- "stable-diffusion-artifacts" - Repeated micro-structures, gaussian halos, edge coherence issues
+- "prompt-leakage" - Text fragments like "Generate receipt", "Create invoice"
+- "chatgpt-format" - Markdown syntax, code formatting in receipt text
+- "watermark-traces" - Faint AI service watermarks even if partially removed
 
-Consistency anomalies: mismatch-total-lines, duplicated-line-items, subtotal-tax-mismatch without a valid discount or service line
+CATEGORY 2: METADATA RED FLAGS (High Weight: +0.35 each)
 
-Behavioral indicators in a single file or batch: repeated-layout-pattern, multiple-receipts-perfectly-uniform
+- "generator-metadata" - File contains: "Adobe Firefly", "Midjourney", "DALL-E", "Stable Diffusion", "Canva AI", "Photoshop Generative"
+- "no-camera-exif" - Missing camera EXIF (Make, Model, DateTimeOriginal) when claiming to be photo
+- "screenshot-only" - Screenshot metadata + resolution matches screens (1920x1080, 1366x768, 2560x1440)
+
+CATEGORY 3: VISUAL ARTIFACTS (Medium Weight: +0.25 each)
+
+- "impossible-lighting" - Lighting inconsistent with retail environment
+- "vector-in-thermal" - Vector-quality elements in thermal receipt
+- "layered-compositing" - Evidence of layer compositing (halos, misaligned elements)
+- "synthetic-noise" - Algorithmic noise vs organic camera noise
+- "too-perfect-ocr" - All text perfectly readable (real receipts have smudges, fading)
+
+CATEGORY 4: CONTENT IMPOSSIBILITIES (Medium Weight: +0.25 each)
+
+- "impossible-invoice-format" - Invoice number wrong format (test patterns: "INV-00001", "TEST-123")
+- "merchant-not-found" - Merchant doesn't exist in business registries
+- "test-data" - Names like "Test Store", "Sample Restaurant", "Lorem Ipsum"
+- "generic-items" - Line items: "Item 1", "Product A", "Service"
+- "tax-error" - Tax calculation impossible for jurisdiction
+- "impossible-total" - Math doesn't add up (>$0.05 difference)
+- "currency-location-mismatch" - USD in Europe-only merchant, GBP in US-only chain
+
+CATEGORY 5: PATTERN ANOMALIES (Low Weight: +0.15 each)
+
+- "round-numbers-only" - All amounts are round ($10, $25, $50)
+- "font-inconsistency" - Multiple fonts in single-font medium (thermal)
+- "impossible-thermal" - Color/gradients in thermal receipt
+- "qr-fake" - QR code doesn't scan or contains test data
+
+CONFIDENCE SCORING:
+
+Calculate cumulative score from detected indicators:
+- Score = sum of all indicator weights
+- 0.0-0.3: Low confidence → Don't flag
+- 0.3-0.6: Uncertain → Don't flag, but include evidence
+- 0.6-0.8: High confidence → Flag with manual review
+- 0.8+: Very high confidence → Likely AI-generated
+
+REQUIRED EVIDENCE QUALITY:
+
+- Minimum 2 different indicators to flag
+- Prefer combining visual + content evidence
+- Single weak indicator (only no-exif) = insufficient
+- Multiple corroborating indicators = higher confidence
+
+GEMINI VISION ANALYSIS:
+
+As a vision model, analyze pixel-level patterns:
+- Compression artifacts: Real vs AI compression patterns
+- Color histograms: Natural vs synthetic distributions
+- Edge detection: Real photo edges vs AI-rendered edges
+- Noise patterns: Camera sensor noise vs algorithmic noise
+- Texture analysis: Organic paper texture vs generated texture
+
+Use your vision capabilities to detect patterns invisible to OCR.
 
 duplicate:
 
@@ -262,7 +324,9 @@ Examples: no-exif, image-hash-match, phash-similarity:4, ocr-similarity:97, vend
 
 ACTIONABLE OUTPUTS:
 
-If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Hold for manual review, potential AI generated receipt"
+If suspicious_fraud_risk.value true and confidence >= 0.75, notes = "Suspicious Fraud (AI-Generated) - Hold for manual review"
+
+If suspicious_fraud_risk.value true and confidence 0.6-0.75, notes = "Suspicious Fraud (AI-Generated) - Verify authenticity"
 
 If duplicate.value true and confidence >= 0.9, notes = "Auto reject duplicate", include duplicate_of
 
@@ -668,6 +732,111 @@ app.get('/api/health', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Receipt Data Extractor API is running' });
+});
+
+// Use Resend for email sending (simpler than SMTP)
+// Initialize lazily to avoid errors when API key is not set
+const { Resend } = require('resend');
+let resend = null;
+
+function getResend() {
+  if (!resend) {
+    const apiKey = process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY;
+    if (!apiKey) {
+      throw new Error('Resend API key not configured');
+    }
+    resend = new Resend(apiKey);
+  }
+  return resend;
+}
+
+// Utility to convert array of objects to CSV
+function toCSV(rows) {
+  if (!rows || rows.length === 0) return '';
+  
+  const headers = Object.keys(rows[0]);
+  
+  const esc = (v) => {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') 
+      ? `"${s.replace(/"/g, '""')}"` 
+      : s;
+  };
+  
+  const lines = [
+    headers.join(','),
+    ...rows.map(r => headers.map(h => esc(r[h])).join(','))
+  ];
+  
+  return lines.join('\n');
+}
+
+// Send CSV endpoint
+app.post('/api/send-csv', async (req, res) => {
+  try {
+    const { email, rows, filename = 'mesh-receipts.csv' } = req.body;
+
+    // Basic validation
+    if (!email || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    // Domain filter on server as well
+    const blocked = new Set([
+      'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com',
+      'aol.com', 'proton.me', 'zoho.com', 'gmx.com', 'yandex.com', 'live.com', 'msn.com'
+    ]);
+    
+    const domain = String(email).toLowerCase().split('@')[1] || '';
+    if (blocked.has(domain)) {
+      return res.status(400).json({ error: 'Business email required' });
+    }
+
+    const csv = toCSV(rows);
+    console.log('[send-csv] CSV generated, length:', csv.length);
+
+    // Check API key configuration and initialize Resend
+    let resendInstance;
+    try {
+      resendInstance = getResend();
+    } catch (e) {
+      console.error('[send-csv] Email service API key not configured');
+      return res.status(500).json({ error: 'Email service not configured. Please set RESEND_API_KEY.' });
+    }
+
+    // Convert CSV to Buffer for attachment (Resend accepts Buffer or base64 string)
+    const csvBuffer = Buffer.from(csv, 'utf-8');
+
+    // Send email with attachment using Resend
+    const emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    const { data, error } = await resendInstance.emails.send({
+      from: emailFrom,
+      to: email,
+      subject: 'Your CSV from Mesh AI',
+      html: `
+        <p>Here is your CSV generated by <strong>Mesh AI</strong>.</p>
+        <p>If you did not request this, ignore this message.</p>
+      `,
+      attachments: [
+        {
+          filename,
+          content: csvBuffer, // Resend accepts Buffer directly
+        }
+      ]
+    });
+
+    if (error) {
+      console.error('[send-csv] Resend error:', error);
+      throw new Error(error.message || 'Failed to send email');
+    }
+
+    console.log('[send-csv] Email sent successfully:', data?.id);
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('Error sending CSV email:', e);
+    return res.status(500).json({ error: 'Send failed' });
+  }
 });
 
 app.listen(PORT, () => {

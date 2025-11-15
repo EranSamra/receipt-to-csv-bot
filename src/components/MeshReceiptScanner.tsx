@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import Lottie from "lottie-react";
 import "./scanner.css";
+import { convertPDFToImage } from "@/utils/pdfConverter";
 
 type Item = {
   id: string;
@@ -28,7 +29,7 @@ async function withMinDuration<T>(promise: Promise<T>, minMs = 1500): Promise<T>
 
 type MeshReceiptScannerProps = {
   files: File[];
-  onScanComplete: (results: any[]) => void;
+  onScanComplete: (results: any[], fileIndices: number[]) => void;
   onError?: (error: Error) => void;
   extractReceiptFn: (file: File) => Promise<{ ok: boolean; data?: any }>;
 };
@@ -94,17 +95,66 @@ export default function MeshReceiptScanner({
       return [];
     });
 
-    // Create new items with fresh blob URLs
-    const newItems: Item[] = files.map((f, index) => ({
-      id: `${Date.now()}-${f.name}-${index}-${Math.random()}`,
-      file: f,
-      url: URL.createObjectURL(f),
-      status: "queued" as const,
-    }));
-
-    console.log(`[Scanner] Created ${newItems.length} items from files`);
-    setItems(newItems);
-    if (newItems.length > 0) setActiveIndex(0);
+    // Create preview URLs - convert PDFs to images for preview
+    const createPreviewUrls = async () => {
+      const newItems: Item[] = [];
+      
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
+        let previewUrl: string;
+        
+        // If PDF, convert to image for preview
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          try {
+            console.log(`[Scanner] Converting PDF ${file.name} to image for preview...`);
+            const imageFile = await convertPDFToImage(file, 'image/jpeg', 0.8);
+            previewUrl = URL.createObjectURL(imageFile);
+            console.log(`[Scanner] ✅ PDF preview created for ${file.name}`);
+          } catch (error) {
+            console.error(`[Scanner] Failed to convert PDF for preview, using placeholder:`, error);
+            // Create a data URL placeholder for PDFs
+            previewUrl = 'data:image/svg+xml;base64,' + btoa(`
+              <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+                <rect width="400" height="300" fill="#f3f4f6"/>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="#9ca3af" stroke-width="2"/>
+                <polyline points="14 2 14 8 20 8" fill="none" stroke="#9ca3af" stroke-width="2"/>
+                <line x1="16" y1="13" x2="8" y2="13" stroke="#9ca3af" stroke-width="2"/>
+                <line x1="16" y1="17" x2="8" y2="17" stroke="#9ca3af" stroke-width="2"/>
+                <text x="200" y="180" text-anchor="middle" fill="#6b7280" font-family="Arial" font-size="14">PDF Preview</text>
+                <text x="200" y="200" text-anchor="middle" fill="#9ca3af" font-family="Arial" font-size="12">${file.name}</text>
+              </svg>
+            `);
+          }
+        } else {
+          // For images, use blob URL directly
+          previewUrl = URL.createObjectURL(file);
+        }
+        
+        newItems.push({
+          id: `${Date.now()}-${file.name}-${index}-${Math.random()}`,
+          file: file,
+          url: previewUrl,
+          status: "queued" as const,
+        });
+      }
+      
+      console.log(`[Scanner] Created ${newItems.length} items from files`);
+      setItems(newItems);
+      if (newItems.length > 0) setActiveIndex(0);
+    };
+    
+    createPreviewUrls().catch(error => {
+      console.error(`[Scanner] Error creating preview URLs:`, error);
+      // Fallback: create items with regular blob URLs
+      const fallbackItems: Item[] = files.map((f, index) => ({
+        id: `${Date.now()}-${f.name}-${index}-${Math.random()}`,
+        file: f,
+        url: URL.createObjectURL(f),
+        status: "queued" as const,
+      }));
+      setItems(fallbackItems);
+      if (fallbackItems.length > 0) setActiveIndex(0);
+    });
   }, [files]);
 
   // Cleanup URLs on unmount
@@ -139,6 +189,7 @@ export default function MeshReceiptScanner({
     setIsScanning(true);
 
     const results: any[] = [];
+    const fileIndices: number[] = []; // Track which file index each receipt came from
     
     // Capture current items array to avoid stale closures
     const currentItems = [...items];
@@ -186,8 +237,12 @@ export default function MeshReceiptScanner({
               )
             );
           } else {
+            // Add receipts and track which file they came from
+            receiptData.forEach(() => {
+              fileIndices.push(i); // Track file index for each receipt
+            });
             results.push(...receiptData); // Spread to add all receipts
-            console.log(`[Scanner] Added ${receiptData.length} receipt(s) to results. Total so far: ${results.length}`);
+            console.log(`[Scanner] Added ${receiptData.length} receipt(s) from file ${i + 1} (index ${i}) to results. Total so far: ${results.length}`);
             
             // Update status using item ID to avoid index issues
             setItems((prev) =>
@@ -229,8 +284,9 @@ export default function MeshReceiptScanner({
     console.log(`[Scanner] Successfully extracted receipts from ${results.length > 0 ? 'some' : 'no'} files`);
     
     if (results.length > 0) {
-      console.log(`[Scanner] Calling onScanComplete with ${results.length} receipts`);
-      onScanComplete(results);
+      console.log(`[Scanner] Calling onScanComplete with ${results.length} receipts and ${fileIndices.length} file indices`);
+      console.log(`[Scanner] File indices mapping:`, fileIndices);
+      onScanComplete(results, fileIndices);
     } else {
       // Check if any items have errors
       setItems((prev) => {
@@ -307,27 +363,56 @@ export default function MeshReceiptScanner({
           <div className="preview-area">
             {current && (
               <div className={`preview-frame ${current.status === "scanning" ? "dim" : ""}`}>
-                <img 
-                  src={current.url} 
-                  alt={current.file.name} 
-                  className="preview-img"
-                  onError={(e) => {
-                    // If blob URL fails, try to recreate it
-                    const target = e.target as HTMLImageElement;
-                    try {
-                      const newUrl = URL.createObjectURL(current.file);
-                      target.src = newUrl;
-                      // Update the item with new URL
-                      setItems(prev => prev.map(item => 
-                        item.id === current.id 
-                          ? { ...item, url: newUrl }
-                          : item
-                      ));
-                    } catch (err) {
-                      console.error('Failed to recreate blob URL:', err);
-                    }
-                  }}
-                />
+                {current.file.type === 'application/pdf' || current.file.name.toLowerCase().endsWith('.pdf') ? (
+                  // For PDFs, show image preview (converted) or fallback
+                  <img 
+                    src={current.url} 
+                    alt={current.file.name} 
+                    className="preview-img"
+                    onError={(e) => {
+                      // If preview fails, try to convert on-the-fly
+                      const target = e.target as HTMLImageElement;
+                      console.log(`[Scanner] PDF preview failed, attempting on-the-fly conversion...`);
+                      convertPDFToImage(current.file, 'image/jpeg', 0.8)
+                        .then(imageFile => {
+                          const newUrl = URL.createObjectURL(imageFile);
+                          target.src = newUrl;
+                          setItems(prev => prev.map(item => 
+                            item.id === current.id 
+                              ? { ...item, url: newUrl }
+                              : item
+                          ));
+                        })
+                        .catch(err => {
+                          console.error('Failed to convert PDF for preview:', err);
+                          // Show placeholder
+                          target.style.display = 'none';
+                        });
+                    }}
+                  />
+                ) : (
+                  <img 
+                    src={current.url} 
+                    alt={current.file.name} 
+                    className="preview-img"
+                    onError={(e) => {
+                      // If blob URL fails, try to recreate it
+                      const target = e.target as HTMLImageElement;
+                      try {
+                        const newUrl = URL.createObjectURL(current.file);
+                        target.src = newUrl;
+                        // Update the item with new URL
+                        setItems(prev => prev.map(item => 
+                          item.id === current.id 
+                            ? { ...item, url: newUrl }
+                            : item
+                        ));
+                      } catch (err) {
+                        console.error('Failed to recreate blob URL:', err);
+                      }
+                    }}
+                  />
+                )}
                 {current.status === "scanning" && lottieData && (
                   <div className="scan-overlay">
                     <Lottie
@@ -361,19 +446,38 @@ export default function MeshReceiptScanner({
                   alt={it.file.name} 
                   className="thumb-img"
                   onError={(e) => {
-                    // If blob URL fails, try to recreate it
+                    // If preview fails, try to recreate or convert
                     const target = e.target as HTMLImageElement;
-                    try {
-                      const newUrl = URL.createObjectURL(it.file);
-                      target.src = newUrl;
-                      // Update the item with new URL
-                      setItems(prev => prev.map(item => 
-                        item.id === it.id 
-                          ? { ...item, url: newUrl }
-                          : item
-                      ));
-                    } catch (err) {
-                      console.error('Failed to recreate blob URL:', err);
+                    const isPDF = it.file.type === 'application/pdf' || it.file.name.toLowerCase().endsWith('.pdf');
+                    
+                    if (isPDF) {
+                      // Try converting PDF on-the-fly for thumbnail
+                      convertPDFToImage(it.file, 'image/jpeg', 0.7)
+                        .then(imageFile => {
+                          const newUrl = URL.createObjectURL(imageFile);
+                          target.src = newUrl;
+                          setItems(prev => prev.map(item => 
+                            item.id === it.id 
+                              ? { ...item, url: newUrl }
+                              : item
+                          ));
+                        })
+                        .catch(err => {
+                          console.error('Failed to convert PDF for thumbnail:', err);
+                        });
+                    } else {
+                      // For images, try to recreate blob URL
+                      try {
+                        const newUrl = URL.createObjectURL(it.file);
+                        target.src = newUrl;
+                        setItems(prev => prev.map(item => 
+                          item.id === it.id 
+                            ? { ...item, url: newUrl }
+                            : item
+                        ));
+                      } catch (err) {
+                        console.error('Failed to recreate blob URL:', err);
+                      }
                     }
                   }}
                 />

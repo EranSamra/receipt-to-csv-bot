@@ -1,4 +1,4 @@
-import { Download, FileText, Calendar, DollarSign, Building, Tag, AlertTriangle, Copy, Wine, ShoppingBag, Shield, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, FileText, Calendar, DollarSign, Building, Tag, AlertTriangle, Copy, Wine, ShoppingBag, Shield, AlertCircle, ChevronDown, ChevronRight, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -49,6 +49,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
   if (data.length === 0) return null;
 
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
 
   const toggleRow = (index: number) => {
     const newExpanded = new Set(expandedRows);
@@ -60,68 +61,29 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
     setExpandedRows(newExpanded);
   };
 
+  // Helper function to check if row has any flags
+  const hasAnyFlagCheck = (row: ReceiptData) => {
+    const isDuplicate = row["Duplicate"]?.toLowerCase() === 'yes';
+    const fraudRisk = row["Fraud Risk"]?.toLowerCase() || 'low';
+    const hasAlcoholTobacco = row["Alcohol/Tobacco"]?.toLowerCase() === 'yes';
+    const hasPersonalExpense = row["Personal Expense"]?.toLowerCase().includes('suspicious');
+    return isDuplicate || (fraudRisk === 'high' || fraudRisk === 'medium') || hasAlcoholTobacco || hasPersonalExpense;
+  };
+
   // Updated duplicate detection - now uses the "Duplicate" column
   const duplicateCount = data.filter(row => row["Duplicate"]?.toLowerCase() === 'yes').length;
   const hasDuplicates = duplicateCount > 0;
   const fraudRiskCount = data.filter(row => row["Fraud Risk"]?.toLowerCase() === 'high' || row["Fraud Risk"]?.toLowerCase() === 'medium').length;
   const alcoholTobaccoCount = data.filter(row => row["Alcohol/Tobacco"]?.toLowerCase() === 'yes').length;
   const personalExpenseCount = data.filter(row => row["Personal Expense"]?.toLowerCase().includes('suspicious')).length;
+  
+  // Filter data based on showFlaggedOnly
+  const filteredData = showFlaggedOnly ? data.filter(hasAnyFlagCheck) : data;
+  const flaggedCount = data.filter(hasAnyFlagCheck).length;
 
   return (
     <div className="space-y-6">
-      {/* Anomaly Warnings */}
-      {(hasDuplicates || fraudRiskCount > 0 || alcoholTobaccoCount > 0 || personalExpenseCount > 0) && (
-        <div className="space-y-3">
-          {hasDuplicates && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                  <Copy className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-red-800 text-base md:text-lg">Duplicate Receipts Detected</h3>
-                  <p className="text-base md:text-lg text-red-600">
-                    {duplicateCount} duplicate receipt{duplicateCount > 1 ? 's' : ''} found. Please review the red highlighted rows below.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          {fraudRiskCount > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-yellow-800 text-base md:text-lg">Suspicious Fraud Risk Detected</h3>
-                  <p className="text-base md:text-lg text-yellow-600">
-                    {fraudRiskCount} receipt{fraudRiskCount > 1 ? 's' : ''} flagged with medium or high fraud risk.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          {(alcoholTobaccoCount > 0 || personalExpenseCount > 0) && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-orange-600" />
-                </div>
-        <div>
-                  <h3 className="font-semibold text-orange-800 text-base md:text-lg">Policy Violations Detected</h3>
-                  <p className="text-base md:text-lg text-orange-600">
-                    {alcoholTobaccoCount > 0 && `${alcoholTobaccoCount} receipt${alcoholTobaccoCount > 1 ? 's' : ''} contain${alcoholTobaccoCount === 1 ? 's' : ''} alcohol/tobacco. `}
-                    {personalExpenseCount > 0 && `${personalExpenseCount} suspicious personal expense${personalExpenseCount > 1 ? 's' : ''} detected.`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Header Stats */}
+      {/* 1. SUMMARY STATS - First */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="mesh-card p-4 text-center">
           <div className="w-12 h-12 bg-gradient-to-br from-turquoise-100 to-turquoise-200 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -155,7 +117,175 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
         </div>
       </div>
 
-      {/* Data Table */}
+      {/* 2. POLICY VIOLATIONS - Single card with filter in header */}
+      {(hasDuplicates || fraudRiskCount > 0 || alcoholTobaccoCount > 0 || personalExpenseCount > 0) && (
+        <div className="bg-red-50 border-l-4 border-l-red-500 border border-red-200 rounded-xl p-4 md:p-6">
+          {/* Header with filter button */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg md:text-xl font-bold text-red-900">Policy Violations Detected</h3>
+                <p className="text-sm text-red-700">Review {flaggedCount} flagged expense{flaggedCount > 1 ? 's' : ''}</p>
+              </div>
+            </div>
+            
+            {/* Filter button in same row */}
+            <Button
+              onClick={() => setShowFlaggedOnly(!showFlaggedOnly)}
+              size="sm"
+              variant={showFlaggedOnly ? "default" : "outline"}
+              className={`gap-2 flex-shrink-0 ${showFlaggedOnly ? "bg-red-600 hover:bg-red-700 text-white" : "bg-white border-red-400 text-red-700 hover:bg-red-100"}`}
+            >
+              <Filter className="h-4 w-4" />
+              <span className="hidden sm:inline">{showFlaggedOnly ? 'Show All' : 'Flagged Only'}</span>
+            </Button>
+          </div>
+
+          {/* All violations as text lines */}
+          <div className="space-y-2 text-base md:text-lg text-red-800">
+            {hasDuplicates && (
+              <div className="flex items-start gap-2">
+                <span className="text-red-600">•</span>
+                <span>{duplicateCount} duplicate receipt{duplicateCount > 1 ? 's' : ''} found.</span>
+              </div>
+            )}
+          {fraudRiskCount > 0 && (
+            <div className="flex items-start gap-2">
+              <span className="text-red-600">•</span>
+              <span>{fraudRiskCount} receipt{fraudRiskCount > 1 ? 's' : ''} flagged as Suspicious Fraud (AI-Generated).</span>
+            </div>
+          )}
+            {alcoholTobaccoCount > 0 && (
+              <div className="flex items-start gap-2">
+                <span className="text-red-600">•</span>
+                <span>{alcoholTobaccoCount} receipt{alcoholTobaccoCount > 1 ? 's' : ''} contain{alcoholTobaccoCount === 1 ? 's' : ''} alcohol/tobacco.</span>
+              </div>
+            )}
+            {personalExpenseCount > 0 && (
+              <div className="flex items-start gap-2">
+                <span className="text-red-600">•</span>
+                <span>{personalExpenseCount} suspicious personal expense{personalExpenseCount > 1 ? 's' : ''} detected.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile: Card Layout */}
+
+      {/* Mobile: Card Layout */}
+      <div className="block lg:hidden space-y-3 mb-6">
+        {filteredData.map((row, index) => {
+          const isDuplicate = row["Duplicate"]?.toLowerCase() === 'yes';
+          const fraudRisk = row["Fraud Risk"]?.toLowerCase() || 'low';
+          const hasAlcoholTobacco = row["Alcohol/Tobacco"]?.toLowerCase() === 'yes';
+          const hasPersonalExpense = row["Personal Expense"]?.toLowerCase().includes('suspicious');
+          const hasAnyFlag = isDuplicate || (fraudRisk === 'high' || fraudRisk === 'medium') || hasAlcoholTobacco || hasPersonalExpense;
+          const invoiceNumber = row["Invoice Number"] || '';
+          const receiptImageUrl = row.receiptImage || 
+            (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${index}`));
+          const notes = row["Notes"] || '';
+          
+          return (
+            <div 
+              key={`mobile-${index}`}
+              className={`rounded-lg border p-4 ${hasAnyFlag ? 'bg-red-50 border-l-4 border-l-red-500 border-red-200' : 'bg-white border-gray-200'}`}
+            >
+              {/* Flags at top */}
+              {hasAnyFlag && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {isDuplicate && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 rounded-md">
+                      <img src="/sample-receipts/status-error-icon.png" className="h-3 w-3" alt="" />
+                      <span className="text-xs font-semibold text-red-700">Duplicate</span>
+                    </div>
+                  )}
+                  {(fraudRisk === 'high' || fraudRisk === 'medium') && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 rounded-md">
+                      <img src="/sample-receipts/status-error-icon.png" className="h-3 w-3" alt="" />
+                      <span className="text-xs font-semibold text-red-700">AI-Generated</span>
+                    </div>
+                  )}
+                  {hasAlcoholTobacco && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 rounded-md">
+                      <img src="/sample-receipts/status-error-icon.png" className="h-3 w-3" alt="" />
+                      <span className="text-xs font-semibold text-red-700">Alcohol</span>
+                    </div>
+                  )}
+                  {hasPersonalExpense && (
+                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 rounded-md">
+                      <img src="/sample-receipts/status-error-icon.png" className="h-3 w-3" alt="" />
+                      <span className="text-xs font-semibold text-red-700">Personal</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Main content */}
+              <div className="flex gap-3">
+                {/* Image */}
+                {receiptImageUrl && (
+                  <img 
+                    src={receiptImageUrl}
+                    alt="Receipt" 
+                    className="w-20 h-24 object-cover rounded border border-gray-200 flex-shrink-0"
+                    onClick={() => {
+                      const img = document.createElement('img');
+                      img.src = receiptImageUrl;
+                      img.style.maxWidth = '90vw';
+                      img.style.maxHeight = '90vh';
+                      img.style.objectFit = 'contain';
+                      const modal = document.createElement('div');
+                      modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer';
+                      modal.appendChild(img);
+                      document.body.appendChild(modal);
+                      modal.onclick = () => document.body.removeChild(modal);
+                    }}
+                  />
+                )}
+                
+                {/* Details */}
+                <div className="flex-1 min-w-0">
+                  <div className={`font-semibold text-base ${hasAnyFlag ? 'text-red-800' : 'text-gray-800'} mb-1 truncate`}>
+                    {row["Merchant"] || 'Unknown'}
+                  </div>
+                  <div className={`text-lg font-bold ${hasAnyFlag ? 'text-red-700' : 'text-turquoise-600'}`}>
+                    {row["Amount"]} {row["Currency"]}
+                  </div>
+                  <div className={`text-sm ${hasAnyFlag ? 'text-red-600' : 'text-gray-600'} mt-1`}>
+                    {row["Date"] || 'N/A'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 truncate">
+                    {row["Invoice Number"] || 'No invoice #'}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Notes */}
+              {notes && (
+                <div className="mt-3 text-xs text-gray-600 border-t border-gray-200 pt-2">
+                  {notes}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Empty state when filter applied */}
+      {showFlaggedOnly && filteredData.length === 0 && (
+        <div className="text-center py-12 text-gray-500 bg-white rounded-lg border border-gray-200">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+          <p className="text-lg font-medium">No flagged expenses found</p>
+          <p className="text-sm mt-2">All receipts passed validation checks</p>
+        </div>
+      )}
+
+      {/* Desktop: Table Layout */}
+      <div className="hidden lg:block">
       <div className="mesh-card overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
@@ -200,13 +330,16 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           </TableHeader>
           <TableBody>
               <TooltipProvider delayDuration={300}>
-                {data.map((row, index) => {
+                {filteredData.map((row, index) => {
                   const isDuplicate = row["Duplicate"]?.toLowerCase() === 'yes';
                   const fraudRisk = row["Fraud Risk"]?.toLowerCase() || 'low';
                   const hasAlcoholTobacco = row["Alcohol/Tobacco"]?.toLowerCase() === 'yes';
                   const hasPersonalExpense = row["Personal Expense"]?.toLowerCase().includes('suspicious');
                   const hasLineItems = row.lineItems && row.lineItems.length > 0;
                   const isExpanded = expandedRows.has(index);
+                  
+                  // Detect ANY flag (all flags should be red)
+                  const hasAnyFlag = isDuplicate || (fraudRisk === 'high' || fraudRisk === 'medium') || hasAlcoholTobacco || hasPersonalExpense;
                   
                   // Get receipt image URL
                   const invoiceNumber = row["Invoice Number"] || '';
@@ -216,17 +349,18 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                   // Get notes from backend
                   const notes = row["Notes"] || '';
                   
-                  // Color scheme for row and line items
-                  const rowColor = isDuplicate ? 'bg-red-50 border-red-200' : '';
-                  const textColor = isDuplicate ? 'text-red-800' : 'text-gray-800';
-                  const textColorSecondary = isDuplicate ? 'text-red-600' : 'text-gray-600';
+                  // Color scheme: ALL flagged items get red styling
+                  const rowColor = hasAnyFlag ? 'bg-red-50 border-red-200' : '';
+                  const textColor = hasAnyFlag ? 'text-red-800' : 'text-gray-800';
+                  const textColorSecondary = hasAnyFlag ? 'text-red-600' : 'text-gray-600';
+                  const borderLeft = hasAnyFlag ? 'border-l-4 border-l-red-500' : '';
                   
                   return (
                     <>
                       {/* Parent Row */}
                       <TableRow 
                         key={`parent-${index}`}
-                        className={`hover:bg-gray-50 mesh-transition-fast border-b border-gray-100 ${rowColor}`}
+                        className={`hover:bg-gray-50 mesh-transition-fast border-b border-gray-100 ${rowColor} ${borderLeft}`}
                       >
                         <TableCell>
                           {hasLineItems && (
@@ -299,92 +433,61 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                         <TableCell className={`${textColorSecondary} text-base md:text-lg`}>
                           {row["Currency"] || 'N/A'}
                 </TableCell>
-                        <TableCell className={`${isDuplicate ? 'text-red-700 font-semibold' : 'text-gray-700'} text-base md:text-lg`}>
+                        <TableCell className={`${hasAnyFlag ? 'text-red-700 font-semibold' : 'text-gray-700'} text-base md:text-lg`}>
                           {row["Merchant"]?.replace("DUPLICATE RECEIPT UPLOADED", "").trim() || row["Merchant"] || 'N/A'}
                 </TableCell>
                         <TableCell>
-                          {/* Show flag icons if any flags are detected, or show notes text */}
+                          {/* Show flag badges with text labels */}
                           {(isDuplicate || fraudRisk === 'high' || fraudRisk === 'medium' || hasAlcoholTobacco || hasPersonalExpense || notes) ? (
-                            <div className="flex items-center gap-2">
-                              {/* Flag icons */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Flag badges - all red with text labels */}
                               {isDuplicate && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="cursor-help flex items-center justify-center hover:opacity-80 transition-opacity">
-                                      <img 
-                                        src="/sample-receipts/status-error-icon.png" 
-                                        alt="Duplicate" 
-                                        className="h-5 w-5 pointer-events-none"
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" align="start">
-                                    <p>Suspicious: This receipt appears to be a duplicate</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-md">
+                                  <img 
+                                    src="/sample-receipts/status-error-icon.png" 
+                                    alt="Duplicate" 
+                                    className="h-4 w-4"
+                                  />
+                                  <span className="text-xs font-semibold text-red-700">Duplicate</span>
+                                </div>
                               )}
                               {(fraudRisk === 'high' || fraudRisk === 'medium') && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="cursor-help flex items-center justify-center hover:opacity-80 transition-opacity">
-                                      <img 
-                                        src="/sample-receipts/status-error-icon.png" 
-                                        alt="Fraud Risk" 
-                                        className="h-5 w-5 pointer-events-none"
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" align="start">
-                                    <p>{fraudRisk === 'high' 
-                                      ? 'High fraud risk: Multiple suspicious patterns detected' 
-                                      : 'Medium fraud risk: Some inconsistencies detected'}</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-md">
+                                  <img 
+                                    src="/sample-receipts/status-error-icon.png" 
+                                    alt="Suspicious Fraud (AI-Generated)" 
+                                    className="h-4 w-4"
+                                  />
+                                  <span className="text-xs font-semibold text-red-700">
+                                    AI-Generated
+                                  </span>
+                                </div>
                               )}
                               {hasAlcoholTobacco && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="cursor-help flex items-center justify-center hover:opacity-80 transition-opacity">
-                                      <img 
-                                        src="/sample-receipts/status-error-icon.png" 
-                                        alt="Alcohol/Tobacco" 
-                                        className="h-5 w-5 pointer-events-none"
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" align="start">
-                                    <p>Contains alcohol or tobacco products</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-md">
+                                  <img 
+                                    src="/sample-receipts/status-error-icon.png" 
+                                    alt="Alcohol/Tobacco" 
+                                    className="h-4 w-4"
+                                  />
+                                  <span className="text-xs font-semibold text-red-700">Alcohol</span>
+                                </div>
                               )}
                               {hasPersonalExpense && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="cursor-help flex items-center justify-center hover:opacity-80 transition-opacity">
-                                      <img 
-                                        src="/sample-receipts/status-error-icon.png" 
-                                        alt="Personal Expense" 
-                                        className="h-5 w-5 pointer-events-none"
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" align="start">
-                                    <p>Suspicious: Merchant matches personal expense category</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 rounded-md">
+                                  <img 
+                                    src="/sample-receipts/status-error-icon.png" 
+                                    alt="Personal Expense" 
+                                    className="h-4 w-4"
+                                  />
+                                  <span className="text-xs font-semibold text-red-700">Personal</span>
+                                </div>
                               )}
-                              {/* Notes text from backend */}
+                              {/* Notes text */}
                               {notes && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="max-w-xs truncate cursor-help text-base md:text-lg text-gray-600">
-                                      {notes}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-md">
-                                    <p className="text-base md:text-lg">{notes}</p>
-                                  </TooltipContent>
-                                </Tooltip>
+                                <span className="text-xs text-gray-600 truncate max-w-[150px] sm:max-w-xs" title={notes}>
+                                  {notes}
+                                </span>
                               )}
                             </div>
                           ) : (
@@ -429,6 +532,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           </TableBody>
         </Table>
         </div>
+      </div>
       </div>
     </div>
   );

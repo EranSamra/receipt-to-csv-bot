@@ -2,6 +2,9 @@
   "functions": {
     "api/extract-receipts.js": {
       "maxDuration": 60
+    },
+    "api/send-csv.js": {
+      "maxDuration": 30
     }
   }
 }
