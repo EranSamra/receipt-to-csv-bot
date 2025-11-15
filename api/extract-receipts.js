@@ -734,7 +734,7 @@ For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila
     // Structure response with line items
     const lineItemsArray = Array.from(allLineItems.entries()).map(([invoiceNumber, items]) => ({
       invoiceNumber: invoiceNumber,
-      lineItems: items.map((item: any) => ({
+      lineItems: items.map((item) => ({
         description: item.description || '',
         date: item.date || '',
         amount: item.amount || '',
