@@ -20,8 +20,8 @@ interface ExamplesModalProps {
 const exampleReceipts: ExampleReceipt[] = [
   {
     id: "fake-receipt",
-    name: "Fake Receipt",
-    description: "Sample business receipt with subscription",
+    name: "AI-Generated Receipt",
+    description: "AI-created fake receipt for testing fraud detection",
     filename: "fake-receipt.png",
     thumbnail: "/sample-receipts/fake-receipt.png"
   },
@@ -33,25 +33,25 @@ const exampleReceipts: ExampleReceipt[] = [
     thumbnail: "/sample-receipts/restaurant-receipt.jpeg"
   },
   {
-    id: "whataburger-receipt",
+    id: "alcohol-receipt",
     name: "Alcohol Receipt",
     description: "Liquor store receipt with alcohol purchases",
-    filename: "whataburger-receipt.png",
-    thumbnail: "/sample-receipts/whataburger-receipt.png"
+    filename: "alcohol example.png",
+    thumbnail: "/sample-receipts/alcohol example.png"
   },
   {
-    id: "gas-station-receipt",
-    name: "Gas Station Receipt",
-    description: "Fuel and convenience store purchase",
-    filename: "gas-station-receipt.png",
-    thumbnail: "/sample-receipts/gas-station-receipt.png"
+    id: "software-receipt",
+    name: "Software Receipt",
+    description: "Software subscription or license purchase",
+    filename: "software.png",
+    thumbnail: "/sample-receipts/software.png"
   },
   {
     id: "hotel-receipt",
     name: "Hotel Invoice",
     description: "Hotel accommodation and services",
-    filename: "hotel-receipt.png",
-    thumbnail: "/sample-receipts/hotel-receipt.png"
+    filename: "hotel-receipt copy.png",
+    thumbnail: "/sample-receipts/hotel-receipt copy.png"
   },
   {
     id: "grocery-receipt",
@@ -61,11 +61,11 @@ const exampleReceipts: ExampleReceipt[] = [
     thumbnail: "/sample-receipts/grocery-receipt.jpeg"
   },
   {
-    id: "pharmacy-receipt",
-    name: "Pharmacy Receipt",
-    description: "Medical and health products",
-    filename: "pharmacy-receipt.png",
-    thumbnail: "/sample-receipts/pharmacy-receipt.png"
+    id: "amazon-receipt",
+    name: "Amazon Receipt",
+    description: "Online marketplace order receipt",
+    filename: "Amazon.png",
+    thumbnail: "/sample-receipts/Amazon.png"
   },
   {
     id: "office-supplies",

@@ -244,24 +244,33 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-DETECTION FRAMEWORK: Multi-factor analysis for AI-generated receipts. Flag as true when combined confidence >= 0.6. Use cumulative evidence scoring.
+DETECTION FRAMEWORK: Aggressive multi-factor analysis for AI-generated receipts. BE AGGRESSIVE - better to over-flag suspicious receipts than miss fraud. Flag as true when combined confidence >= 0.6.
 
-CATEGORY 1: AI GENERATION SIGNATURES (High Weight: +0.35 each)
+MANDATORY FIRST CHECKS (perform before detailed analysis):
 
-- "ai-perfect-symmetry" - Unnaturally perfect alignment, pixel-perfect spacing
-- "synthetic-texture" - Generated paper texture (uniform grain, repeated patterns)
-- "digital-native" - Pure digital generation (perfect white background, no shadows, vector-sharp edges)
-- "ai-font-rendering" - Text artifacts typical of AI (synthetic kerning, mathematical spacing)
-- "stable-diffusion-artifacts" - Repeated micro-structures, gaussian halos, edge coherence issues
-- "prompt-leakage" - Text fragments like "Generate receipt", "Create invoice"
-- "chatgpt-format" - Markdown syntax, code formatting in receipt text
-- "watermark-traces" - Faint AI service watermarks even if partially removed
+1. PLACEHOLDER TEXT TEST: If merchant name contains placeholders like "SHOP'S NAME", "MERCHANT NAME", "STORE NAME", "[Company]", "Business Name", "Vendor" → IMMEDIATE FLAG, confidence 0.95, evidence: "placeholder-merchant"
 
-CATEGORY 2: METADATA RED FLAGS (High Weight: +0.35 each)
+2. PERFECT RECEIPT TEST: If receipt appears unnaturally perfect - pristine white background, perfect alignment, zero imperfections, no wear/aging → Strong AI indicator. Real receipts have smudges, fading, slight misalignment.
 
-- "generator-metadata" - File contains: "Adobe Firefly", "Midjourney", "DALL-E", "Stable Diffusion", "Canva AI", "Photoshop Generative"
-- "no-camera-exif" - Missing camera EXIF (Make, Model, DateTimeOriginal) when claiming to be photo
-- "screenshot-only" - Screenshot metadata + resolution matches screens (1920x1080, 1366x768, 2560x1440)
+3. GENERIC PATTERN TEST: Generic merchant + round numbers + generic items = likely template. Check for: "Test Store", "Sample", "Lorem", "Example"
+
+CATEGORY 1: AI GENERATION SIGNATURES (High Weight: +0.40 each)
+
+- "digital-native" - Pure digital creation: perfect white background, zero shadows, vector-sharp edges, no paper texture whatsoever
+- "too-perfect-receipt" - Pristine condition, no smudges/wrinkles/fading/wear (real receipts always show some aging or handling marks)
+- "ai-perfect-symmetry" - Unnaturally perfect alignment, mathematically precise spacing, pixel-perfect positioning
+- "placeholder-merchant" - Merchant name is placeholder: "SHOP'S NAME", "MERCHANT", "STORE NAME", "[Company]", "Business Name"
+- "ai-font-rendering" - Text shows AI artifacts: synthetic kerning, mathematically uniform spacing, perfect baseline alignment
+- "prompt-leakage" - Text fragments: "Generate receipt", "Create invoice", "[insert", "placeholder", template instructions
+- "chatgpt-format" - Markdown syntax, code formatting, template brackets in receipt text
+- "stable-diffusion-artifacts" - Repeated micro-structures, gaussian halos, edge coherence issues typical of SD
+- "watermark-traces" - Faint AI service watermarks or characteristic generation patterns
+
+CATEGORY 2: METADATA RED FLAGS (High Weight: +0.40 each)
+
+- "generator-metadata" - File contains: "Adobe Firefly", "Midjourney", "DALL-E", "Stable Diffusion", "Canva AI", "Photoshop Generative", "ChatGPT", "receipt generator"
+- "no-camera-exif" - Missing camera EXIF (Make, Model, DateTimeOriginal) in JPG/JPEG claiming to be photo
+- "screenshot-only" - Screenshot metadata + resolution exactly matches common screens (1920x1080, 1366x768, 2560x1440, 1440x900)
 
 CATEGORY 3: VISUAL ARTIFACTS (Medium Weight: +0.25 each)
 
@@ -271,14 +280,15 @@ CATEGORY 3: VISUAL ARTIFACTS (Medium Weight: +0.25 each)
 - "synthetic-noise" - Algorithmic noise vs organic camera noise
 - "too-perfect-ocr" - All text perfectly readable (real receipts have smudges, fading)
 
-CATEGORY 4: CONTENT IMPOSSIBILITIES (Medium Weight: +0.25 each)
+CATEGORY 4: CONTENT IMPOSSIBILITIES (High Weight: +0.35 each)
 
-- "impossible-invoice-format" - Invoice number wrong format (test patterns: "INV-00001", "TEST-123")
-- "merchant-not-found" - Merchant doesn't exist in business registries
-- "test-data" - Names like "Test Store", "Sample Restaurant", "Lorem Ipsum"
-- "generic-items" - Line items: "Item 1", "Product A", "Service"
-- "tax-error" - Tax calculation impossible for jurisdiction
-- "impossible-total" - Math doesn't add up (>$0.05 difference)
+- "test-data" - Generic/test merchant names: "Test Store", "Sample Restaurant", "Lorem", "Example Store", "Shop Name", "Business", "Merchant", "Vendor"
+- "generic-merchant" - Vague merchant: "SHOP'S NAME", "STORE", "BUSINESS NAME", "COMPANY", "[Merchant]"
+- "generic-items" - Template line items: "Item 1", "Item 2", "Product A", "Product B", "Service", "Purchase"
+- "impossible-invoice-format" - Test patterns: "INV-00001", "TEST-123", "0001", "12345", sequentially simple numbers
+- "merchant-not-found" - Merchant doesn't exist or is obviously fake
+- "tax-error" - Tax calculation impossible for jurisdiction or mathematically wrong
+- "impossible-total" - Math doesn't add up (>$0.05 difference without explanation)
 - "currency-location-mismatch" - USD in Europe-only merchant, GBP in US-only chain
 
 CATEGORY 5: PATTERN ANOMALIES (Low Weight: +0.15 each)
@@ -299,10 +309,21 @@ Calculate cumulative score from detected indicators:
 
 REQUIRED EVIDENCE QUALITY:
 
-- Minimum 2 different indicators to flag
+- Minimum 2 different indicators to flag (EXCEPT for placeholder-merchant or test-data which can flag alone)
 - Prefer combining visual + content evidence
-- Single weak indicator (only no-exif) = insufficient
+- Single weak indicator (only no-exif) = insufficient UNLESS combined with suspicious patterns
 - Multiple corroborating indicators = higher confidence
+- AGGRESSIVE FLAGGING: When in doubt and multiple weak signals present, FLAG IT - this is fraud detection, false positives are acceptable
+
+AUTOMATIC HIGH-CONFIDENCE FLAGGING:
+
+If ANY of these patterns detected, FLAG IMMEDIATELY with confidence >= 0.85:
+- Merchant name is "SHOP'S NAME" or similar placeholder → confidence 0.95
+- Merchant contains "[", "]", or template syntax → confidence 0.90
+- All line items are "Item 1", "Item 2", "Product A" → confidence 0.90
+- digital-native + no-camera-exif + too-perfect-receipt → confidence 0.95
+- test-data + generic-items + round-numbers-only → confidence 0.90
+- Receipt has ZERO imperfections (no smudges, fading, wrinkles, or natural wear) → confidence 0.85
 
 GEMINI VISION ANALYSIS:
 
