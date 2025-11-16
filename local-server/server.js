@@ -31,7 +31,7 @@ function encodeBase64(buffer) {
 }
 
 // Helper function to convert JSON receipt to CSV row
-function jsonToCSVRow(receipt) {
+function jsonToCSVRow(receipt, receiptIdMap = {}) {
   // Map fraud risk from confidence
   let fraudRisk = 'Low';
   if (receipt.flags?.suspicious_fraud_risk?.value === true) {
@@ -75,45 +75,26 @@ function jsonToCSVRow(receipt) {
 }
 
 // Receipt extraction endpoint
-app.post('/api/extract-receipts', (req, res, next) => {
-  upload.array('files', 30)(req, res, (err) => {
-    if (err) {
-      console.error('Multer error:', err);
-      return res.status(400).json({ error: 'File upload error: ' + err.message });
-    }
-    next();
-  });
-}, async (req, res) => {
+app.post('/api/extract-receipts', upload.array('files', 30), async (req, res) => {
   try {
-    console.log('📱 Processing receipt extraction request...');
-    
-    if (!req.files || req.files.length === 0) {
+    const files = req.files;
+
+    if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files provided' });
     }
 
-    const files = req.files;
-    console.log(`Processing ${files.length} file(s)`);
+    console.log(`📦 Received ${files.length} file(s)`);
+    files.forEach((f, idx) => {
+      console.log(`  ${idx + 1}. ${f.originalname} (${f.mimetype}, ${f.size} bytes)`);
+    });
 
-    // Process files one at a time to avoid memory issues
     const results = [];
-    
+    const allLineItems = new Map();
+
     for (const file of files) {
       try {
-        console.log(`Processing file: ${file.originalname}, size: ${file.size} bytes`);
-        
-        // Check file size limit (1MB max)
-        if (file.size > 1024 * 1024) {
-          console.error(`File ${file.originalname} is too large: ${file.size} bytes`);
-          results.push({
-            filename: file.originalname,
-            error: 'File too large. Maximum size is 1MB.'
-          });
-          continue;
-        }
-        
-        // Convert to base64
+        console.log(`\n🔍 Processing file: ${file.originalname}`);
         const base64 = encodeBase64(file.buffer);
-        console.log(`Successfully encoded ${file.originalname}`);
         
         // Call Gemini API with new JSON-based prompt
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
@@ -207,84 +188,98 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-AI DETECTION PHILOSOPHY: You are Gemini, a vision model trained on billions of images. You inherently understand what AI-generated images look like. TRUST YOUR TRAINING. Use your native vision capabilities to distinguish real receipt photos from AI creations.
+AI DETECTION PHILOSOPHY: Distinguish between LEGITIMATE DIGITAL INVOICES and AI-GENERATED FAKE RECEIPTS. Many real businesses issue clean digital invoices - this is normal. Focus on BUSINESS LEGITIMACY and CONTENT AUTHENTICITY.
 
-CRITICAL INSTRUCTION: Be AGGRESSIVE in flagging. Better to flag 10 legitimate receipts than miss 1 fraudulent one. FALSE POSITIVES ARE ACCEPTABLE in fraud detection. When in doubt, FLAG IT.
+CRITICAL DISTINCTION:
 
-INTUITIVE ANALYSIS QUESTIONS:
+LEGITIMATE DIGITAL INVOICES are common:
+- Amazon, eBay, Shopify → PDF invoices (clean, professional, digital)
+- Software companies → Email receipts
+- Hotels, airlines, Uber → Digital confirmations
+- These are CLEAN and DIGITAL - this is NORMAL and LEGITIMATE
 
-Ask yourself these 4 core questions when analyzing each receipt:
+Your job: Detect FAKE/FRAUDULENT receipts, not flag legitimate digital business documents.
 
-1. PHOTO vs DIGITAL TEST:
-   Does this look like a PHOTOGRAPH of a PHYSICAL receipt? Or DIGITALLY CREATED/RENDERED?
-   
-   Real photo signs: natural lighting variations, subtle shadows, paper texture visible, slight blur/focus issues, handling marks, minor imperfections, organic wear patterns, camera noise
-   
-   AI/Digital signs: perfect white background, vector-sharp edges, mathematical precision alignment, zero texture, unnatural perfection, synthetic uniformity, "too clean"
+LEGITIMACY INDICATORS (DON'T FLAG if present):
 
-2. BUSINESS AUTHENTICITY TEST:
-   Would a real business actually use this receipt? Is the merchant name real and specific?
-   
-   Real examples: "Starbucks Coffee", "Walmart Supercenter #4532", "Joe's Pizza - Downtown"
-   
-   Fake patterns: "SHOP'S NAME", "Store", "Business Name", "Merchant", "[Company Name]", generic one-word names, Lorem Ipsum addresses
+1. REAL BUSINESS VERIFICATION:
+   - Specific legal business name: "TULU TECH LTD", "Amazon Services LLC", "Marriott International Inc"
+   - Complete real addresses with street numbers, postal codes, actual cities
+   - Valid tax/VAT IDs in proper format: "GB248042896", "EIN 12-3456789"
+   - Real contact: actual domains (amazon.com, uber.com), proper emails, real phone formats
+   - Business registration numbers following jurisdiction standards
 
-3. CONTENT REALITY TEST:
-   Are line items actual products/services people buy? Or template placeholders?
-   
-   Real examples: "Grande Latte", "USB-C Cable", "Gasoline - Regular", "Room Service"
-   
-   Fake patterns: "Item 1", "Product A", "Service", "Lorem ipsum", "Dolor sit amet", "Purchase", generic descriptions
+2. KNOWN PLATFORMS:
+   - Amazon, eBay, Etsy, Shopify invoices
+   - Uber, Lyft, DoorDash receipts
+   - Hotel/airline confirmations
+   - Software/SaaS invoices
+   - Professional digital format is EXPECTED and LEGITIMATE
 
-4. AI GENERATION INTUITION:
-   Based on your training on billions of images, does this FEEL like AI output?
-   Does it have that characteristic "AI-generated" quality you've learned to recognize?
-   
-   Trust your pattern recognition. You know what Stable Diffusion, Midjourney, DALL-E, ChatGPT, and other AI tools produce. If it looks like their output, it probably is.
+3. AUTHENTIC CONTENT:
+   - Specific product descriptions: "Syncwire Aux Cable 3.5mm", "Grande Latte", "Premium Gasoline"
+   - Real order/invoice numbers with business-consistent formatting
+   - Actual transaction details with proper dates
+   - Verifiable business information
 
-INSTANT AUTO-FLAGS (confidence 0.90-0.95, no further analysis needed):
+4. DIGITAL IS NORMAL:
+   - Clean PDF invoice ≠ AI-generated
+   - No camera EXIF is EXPECTED for PDFs/digital invoices
+   - Professional formatting is LEGITIMATE
+   - White background is STANDARD for business documents
 
-1. Merchant is placeholder: "SHOP'S NAME", "STORE NAME", "MERCHANT", "BUSINESS", "[Name]", "Vendor", "Company" as primary merchant → FLAG, confidence 0.95
+FAKE/AI-GENERATED INDICATORS (FLAG THESE):
 
-2. Lorem Ipsum anywhere: "Lorem", "Ipsum", "Dolor sit", "Consectetur", "Adipisicing" in any field → FLAG, confidence 0.95
+1. PLACEHOLDER/TEMPLATE:
+   - Generic merchant: "SHOP'S NAME", "Store", "Business Name", "Merchant", "[Company]", one-word names like "Shop" or "Store"
+   - Lorem Ipsum: "Lorem", "Ipsum", "Dolor sit amet", "Consectetur" anywhere
+   - Template items: "Item 1", "Item 2", "Product A", "Service", "Purchase"
+   - Fake phone: "123-456-7890", "+1 012 345 67 89", sequential/obvious fakes
+   - Placeholder address: "Lorem Ipsum, 12345", "123 Main St" only
 
-3. Generic items only: All/most items are "Item 1", "Item 2", "Product A/B", "Service" → FLAG, confidence 0.90
+2. TEST/DUMMY DATA:
+   - "Test Store", "Sample Restaurant", "Example Corp", "Demo Business"
+   - Generic descriptions with no specificity
 
-4. Perfect digital: Pure white background + vector text + zero texture + no shadows → FLAG, confidence 0.90
+3. AI-PHOTO FRAUD (photo claims but AI quality):
+   - Claims to be phone photo but impossibly perfect (zero blur/noise)
+   - Obvious AI art aesthetics
+   - Photo with vector-quality text (impossible with cameras)
 
-5. Test patterns: "Test Store", "Sample", "Example", "Demo" in merchant → FLAG, confidence 0.90
+4. IMPOSSIBLE BUSINESS:
+   - Merchant doesn't exist online
+   - Invalid VAT/tax format
+   - Fake addresses
 
-EVIDENCE TOKENS (suggest but not mandatory - describe what YOU see):
+ANALYSIS DECISION TREE:
 
-Use these terms or create your own based on what you observe:
-- digital-native, too-perfect-receipt, ai-perfect-symmetry, synthetic-texture, no-paper-texture
-- placeholder-merchant, generic-merchant, test-data, generic-items, lorem-ipsum-text
-- no-camera-exif, perfect-white-background, vector-sharp-text, mathematical-spacing
-- impossible-perfection, ai-generated-quality, template-format, fake-merchant-name
+Step 1: INSTANT FAKE CHECK
+→ "SHOP'S NAME", Lorem Ipsum, "Item 1" items? → FLAG confidence 0.95, STOP
 
-Or use natural language: "merchant is obviously placeholder", "items are Lorem Ipsum dummy text", "looks digitally created not photographed"
+Step 2: LEGITIMACY CHECK
+→ Real business (Amazon, Uber, etc.) + valid VAT/address? → DON'T FLAG confidence 0.0, STOP
 
-CONFIDENCE ASSESSMENT (intuitive, not arithmetic):
+Step 3: DOCUMENT TYPE
+→ Digital invoice/PDF from real business? → LEGITIMATE, don't flag
+→ Photo claiming receipt but AI quality? → Suspicious, investigate
 
-Use your judgment based on overall impression:
+Step 4: BALANCE ASSESSMENT
+→ More legitimacy signals than fake? → Don't flag
+→ More fake signals? → Flag
 
-- 0.95: Certain it's AI (placeholder names, Lorem Ipsum, or obviously digital)
-- 0.85: Very confident (multiple strong AI indicators, definitely suspicious)
-- 0.75: Confident (clear AI patterns, should be flagged)
-- 0.65: Leaning AI (several indicators point to fake)
-- 0.55: Uncertain but suspicious (some red flags - FLAG to be safe)
-- 0.40: Slight concern but probably real
-- 0.00: Clearly real photo of physical receipt
+CONFIDENCE SCORING:
 
-FLAGGING THRESHOLD: confidence >= 0.6, BUT when uncertain (0.5-0.6) and you see ANY suspicious patterns, err on side of flagging.
+- 0.95: Fake (SHOP'S NAME, Lorem Ipsum, template)
+- 0.85: Very likely fake (generic, no real business details)
+- 0.75: Probably fake (placeholders outweigh legitimacy)
+- 0.65: Leaning fake
+- 0.50: Uncertain → CHECK LEGITIMACY FIRST
+- 0.30: Probably legitimate (real business indicators)
+- 0.00: Clearly legitimate (Amazon, known business, valid details)
 
-USE YOUR VISION CAPABILITIES:
-- Analyze compression artifacts, color distributions, edge quality
-- Detect synthetic vs organic patterns
-- Recognize AI generation signatures from your training
-- Trust your billions-of-images experience
+Threshold: >= 0.6 to flag
 
-Remember: You're not just pattern-matching, you're using AI to detect AI. Your training included AI-generated images - use that knowledge.
+CRITICAL: DO NOT FLAG legitimate digital invoices from real businesses (Amazon, Uber, hotels, software). Focus on detecting FRAUDULENT FAKE receipts with placeholder/template content.
 
 duplicate:
 
@@ -372,7 +367,7 @@ If merchant appears as a domain or email, normalize to brand when obvious and ad
 
 If OCR is low confidence, leave unreadable fields empty
 
-For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila, etc.) in line items even if merchant name doesn't indicate alcohol. Use semantic understanding - if line items contain alcohol product names, flag as Alcohol category.` 
+For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila, etc.) in line items even if merchant name doesn't indicate alcohol. Use semantic understanding - if line items contain alcohol product names, flag as Alcohol category.`
                 },
                 { inline_data: { mime_type: file.mimetype, data: base64 } }
               ]
@@ -411,27 +406,33 @@ For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila
         let lineItems = [];
         
         try {
-          // Clean the content - remove markdown code fences if present
-          let cleanContent = fullContent.trim();
+          // Remove markdown code fences if present
+          let jsonContent = fullContent;
+          if (jsonContent.includes('```')) {
+            const jsonMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (jsonMatch) {
+              jsonContent = jsonMatch[1];
+            }
+          }
           
-          // Remove markdown code blocks if present
-          cleanContent = cleanContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-          
-          // Try to parse as JSON array
-          const parsed = JSON.parse(cleanContent);
+          const parsed = JSON.parse(jsonContent.trim());
           jsonReceipts = Array.isArray(parsed) ? parsed : [parsed];
           
+          // Log parsed receipt count
           console.log(`✅ Parsed ${jsonReceipts.length} receipt(s) from JSON for ${file.originalname}`);
           
-          // Validate that we got receipts
-          if (jsonReceipts.length === 0) {
-            console.error(`❌ CRITICAL: Parsed JSON but got empty array for ${file.originalname}`);
-          } else {
-            // Log receipt details for debugging
-            jsonReceipts.forEach((receipt, idx) => {
-              console.log(`   Receipt ${idx + 1}: merchant="${receipt.merchant || '(empty)'}", amount=${receipt.amount || 0}, alcohol=${receipt.flags?.unauthorized_category?.categories?.includes('Alcohol') ? 'YES' : 'NO'}`);
-            });
-          }
+          // Log fraud detection results
+          jsonReceipts.forEach((receipt, idx) => {
+            const fraudFlag = receipt.flags?.suspicious_fraud_risk;
+            if (fraudFlag?.value === true) {
+              console.log(`   ⚠️  Receipt ${idx + 1} flagged for fraud: confidence=${fraudFlag.confidence}, evidence=${JSON.stringify(fraudFlag.evidence)}`);
+            }
+            const alcoholFlag = receipt.flags?.unauthorized_category;
+            if (alcoholFlag?.value === true && alcoholFlag.categories?.some(c => c === 'Alcohol' || c === 'Tobacco')) {
+              console.log(`   🍷 Receipt ${idx + 1} contains alcohol/tobacco: categories=${JSON.stringify(alcoholFlag.categories)}`);
+            }
+          });
+          
         } catch (parseError) {
           console.error(`❌ Failed to parse JSON response for ${file.originalname}:`, parseError.message);
           console.error(`   Response content (first 1000 chars):`, fullContent.substring(0, 1000));
@@ -493,130 +494,63 @@ For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila
         
         // Process receipts (now guaranteed to have at least one)
         for (const receipt of jsonReceipts) {
-          // Extract invoice number from receipt (must be extracted from document, not generated)
-          const invoiceNumber = receipt.invoice_number || '';
-          
           // Extract line items if present
-          if (receipt.line_items && Array.isArray(receipt.line_items)) {
-            for (const item of receipt.line_items) {
-              lineItems.push({
-                invoiceNumber: invoiceNumber,
-                description: item.description || '',
-                date: item.date || receipt.date || '',
-                amount: item.amount !== undefined ? String(item.amount) : '',
-                category: item.category || ''
-              });
+          if (receipt.line_items && Array.isArray(receipt.line_items) && receipt.line_items.length > 0) {
+            const invoiceKey = receipt.invoice_number || receipt.receipt_id || file.originalname;
+            if (!allLineItems.has(invoiceKey)) {
+              allLineItems.set(invoiceKey, []);
             }
+            allLineItems.get(invoiceKey).push(...receipt.line_items);
           }
-          
-          // Convert JSON receipt to CSV row
-          const csvRow = jsonToCSVRow(receipt);
-          
-          results.push({
-            filename: file.originalname,
-            csv: csvRow,
-            lineItems: receipt.line_items && receipt.line_items.length > 0 ? 
-              receipt.line_items.map(item => ({
-                invoiceNumber: invoiceNumber,
-                description: item.description || '',
-                date: item.date || receipt.date || '',
-                amount: item.amount !== undefined ? String(item.amount) : '',
-                category: item.category || ''
-              })) : undefined
-          });
         }
         
-        if (lineItems.length > 0) {
-          console.log(`✅ Extracted ${lineItems.length} line items for ${file.originalname}`);
-        }
-        console.log(`Successfully processed ${file.originalname}`);
+        // Convert receipts to CSV format
+        const csvRows = jsonReceipts.map(receipt => jsonToCSVRow(receipt));
+        const csv = csvRows.join('\n');
         
-      } catch (error) {
-        console.error(`Error processing file ${file.originalname}:`, error);
         results.push({
           filename: file.originalname,
-          error: error.message
+          csv: csv,
+          receipts: jsonReceipts
+        });
+        
+        console.log(`✅ Successfully processed ${file.originalname}: ${jsonReceipts.length} receipt(s)`);
+        
+      } catch (fileError) {
+        console.error(`Error processing file ${file.originalname}:`, fileError);
+        results.push({
+          filename: file.originalname,
+          error: fileError.message
         });
       }
     }
-    
+
     // Post-process: Detect duplicates across all files and collect line items
     // Parse all CSV rows and check for duplicates
     const allRows = [];
-    const allLineItems = new Map(); // Map invoice number to line items
     
-    // Helper function to parse CSV line with quoted values
-    function parseCSVLine(line) {
-      const values = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-        
-        if (char === '"') {
-          if (inQuotes && nextChar === '"') {
-            // Escaped quote
-            current += '"';
-            i++; // Skip next quote
-          } else {
-            // Toggle quote state
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          // Field separator
-          values.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      values.push(current.trim()); // Add last field
-      return values;
-    }
-    
-    for (const result of results) {
+    results.forEach(result => {
       if (result.csv) {
-        const lines = result.csv.trim().split('\n');
-        for (const line of lines) {
-          if (line.trim() && !line.trim().startsWith('Invoice Number')) { // Skip header
-            const values = parseCSVLine(line);
-            if (values.length >= 6) {
-              // Clean and trim all values (parseCSVLine already trims, but ensure quotes are removed and trimmed again)
-              const cleanValue = (val) => (val || '').replace(/^"|"$/g, '').trim();
-              
-              const invoiceNum = cleanValue(values[0]);
-              
-              // Find line items for this invoice number
-              const rowLineItems = result.lineItems?.filter(li => li.invoiceNumber === invoiceNum) || [];
-              
-              // Store line items in map
-              if (invoiceNum && rowLineItems.length > 0) {
-                if (!allLineItems.has(invoiceNum)) {
-                  allLineItems.set(invoiceNum, []);
-                }
-                allLineItems.get(invoiceNum).push(...rowLineItems);
-              }
-              
-              allRows.push({
-                invoiceNumber: invoiceNum,
-                date: cleanValue(values[1]),
-                amount: cleanValue(values[2]),
-                currency: cleanValue(values[3]),
-                merchant: cleanValue(values[4]),
-                transactionType: cleanValue(values[5]) || 'Other',
-                fraudRisk: cleanValue(values[6]) || 'Low',
-                duplicate: cleanValue(values[7]) || 'No',
-                alcoholTobacco: cleanValue(values[8]) || 'No',
-                personalExpense: cleanValue(values[9]) || 'No',
-                notes: cleanValue(values[10]) || ''
-              });
-            }
-          }
-        }
+        const rows = result.csv.split('\n').filter(row => row.trim());
+        rows.forEach(row => {
+          const values = row.split(',');
+          const obj = {
+            invoiceNumber: values[0] || '',
+            date: values[1] || '',
+            amount: values[2] || '',
+            currency: values[3] || '',
+            merchant: values[4] || '',
+            transactionType: values[5] || '',
+            fraudRisk: values[6] || 'Low',
+            duplicate: values[7] || 'No',
+            alcoholTobacco: values[8] || 'No',
+            personalExpense: values[9] || 'No',
+            notes: values[10] || ''
+          };
+          allRows.push(obj);
+        });
       }
-    }
+    });
     
     // Normalize values for duplicate comparison
     const normalizeForDuplicate = (row) => {
@@ -706,12 +640,27 @@ For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila
     };
     
     console.log('Extraction completed successfully');
+    
+    // Count files with errors vs success
+    const filesWithErrors = results.filter(r => r.error).length;
+    const filesWithCSV = results.filter(r => r.csv).length;
+    const totalFilesProcessed = results.length;
+    
+    console.log(`📁 Files processed: ${totalFilesProcessed} total, ${filesWithCSV} successful, ${filesWithErrors} errors`);
+    
     const duplicateCount = allRows.filter(r => r.duplicate === 'Yes').length;
     const fraudRiskCount = allRows.filter(r => r.fraudRisk === 'High' || r.fraudRisk === 'Medium').length;
     const alcoholTobaccoCount = allRows.filter(r => r.alcoholTobacco === 'Yes').length;
     const personalExpenseCount = allRows.filter(r => r.personalExpense === 'Suspicious Personal').length;
     
-    console.log(`📊 Summary: ${allRows.length} receipts processed`);
+    console.log(`📊 Summary: ${allRows.length} receipts extracted from ${filesWithCSV} successful files`);
+    
+    if (filesWithErrors > 0) {
+      console.warn(`⚠️ ${filesWithErrors} file(s) failed to extract:`);
+      results.filter(r => r.error).forEach(r => {
+        console.warn(`  - ${r.filename}: ${r.error}`);
+      });
+    }
     if (duplicateCount > 0) {
       console.log(`  ⚠️  ${duplicateCount} duplicate receipt(s) detected`);
     }
@@ -729,24 +678,15 @@ For alcohol detection: recognize spirit names (vodka, gin, rum, whiskey, tequila
     if (totalLineItems > 0) {
       console.log(`  📋 ${totalLineItems} total line items extracted across all receipts`);
     }
-    
     res.status(200).json(responseData);
-
+    
   } catch (error) {
-    console.error('Error in extract-receipts endpoint:', error);
+    console.error('Server error:', error);
     res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+      error: error.message || 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? String(error) : undefined
     });
   }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Receipt scanner server is running',
-    geminiApiKey: GEMINI_API_KEY ? 'Configured' : 'Not configured'
-  });
 });
 
 // Health check endpoint
@@ -861,6 +801,6 @@ app.post('/api/send-csv', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Receipt Scanner Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔑 Gemini API Key: ${GEMINI_API_KEY ? 'Configured' : 'Not configured'}`);
 });
