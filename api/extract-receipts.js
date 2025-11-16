@@ -256,83 +256,112 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-AI DETECTION PHILOSOPHY: You are Gemini, a vision model trained on billions of images. You inherently understand what AI-generated images look like. TRUST YOUR TRAINING. Use your native vision capabilities to distinguish real receipt photos from AI creations.
+AI DETECTION PHILOSOPHY: Distinguish between LEGITIMATE DIGITAL INVOICES (from real businesses) and AI-GENERATED FAKE RECEIPTS. Many legitimate businesses issue clean digital invoices - this is normal. Focus on BUSINESS LEGITIMACY, not just digital vs photo.
 
-CRITICAL INSTRUCTION: Be AGGRESSIVE in flagging. Better to flag 10 legitimate receipts than miss 1 fraudulent one. FALSE POSITIVES ARE ACCEPTABLE in fraud detection. When in doubt, FLAG IT.
+CRITICAL DISTINCTION:
 
-ANALYSIS QUESTIONS (ask yourself):
+LEGITIMATE DIGITAL INVOICES are common and normal:
+- Amazon, eBay, online retailers → Digital PDF invoices
+- Software companies (Adobe, Microsoft) → Email receipts
+- Hotels, airlines, services → Digital confirmations
+- These are CLEAN, PROFESSIONAL, DIGITAL - this is LEGITIMATE, not suspicious
 
-1. PHOTO vs DIGITAL TEST:
-   - Does this look like a PHOTOGRAPH of a PHYSICAL receipt?
-   - Or does it look DIGITALLY CREATED/RENDERED?
-   
-   Real photos have: natural lighting variations, subtle shadows, paper texture, slight blur/focus issues, handling marks, minor imperfections, organic wear
-   
-   AI/Digital have: perfect white backgrounds, vector-sharp edges, mathematical precision, zero texture, unnatural perfection, synthetic uniformity
+You must distinguish:
+- LEGITIMATE DIGITAL INVOICE: Real business, verifiable details, proper documentation → DON'T FLAG
+- FAKE/AI-GENERATED: Fake business, placeholder text, template patterns, Lorem Ipsum → FLAG AGGRESSIVELY
 
-2. BUSINESS AUTHENTICITY TEST:
-   - Would a real business use this receipt?
-   - Is the merchant name real and specific?
-   - Or is it generic/placeholder?
-   
-   Real: "Starbucks Coffee", "Walmart Supercenter #4532", "Joe's Pizza"
-   
-   Fake: "SHOP'S NAME", "Store", "Business Name", "Merchant", "[Company Name]", "Lorem Ipsum"
+LEGITIMACY INDICATORS (DON'T FLAG if present):
 
-3. CONTENT REALITY TEST:
-   - Are line items real products/services?
-   - Or template placeholders?
-   
-   Real: "Grande Latte", "USB Cable", "Gasoline - Regular"
-   
-   Fake: "Item 1", "Product A", "Service", "Lorem ipsum", "Dolor sit amet"
+1. REAL BUSINESS MARKERS:
+   - Specific business legal name with entity type: "TULU TECH LTD", "Amazon Services LLC", "Starbucks Corporation"
+   - Complete real addresses: street numbers, postal codes, actual cities
+   - Valid tax/VAT IDs: proper format for jurisdiction (GB123456789, EIN format)
+   - Real contact info: actual website domains (amazon.com, uber.com), proper email formats
+   - Business registration numbers that follow proper formatting
 
-4. AI INTUITION TEST:
-   - Based on your training on billions of images, does this FEEL like AI output?
-   - Does it have that characteristic "AI-generated" quality?
-   - Trust your model's inherent pattern recognition
+2. KNOWN LEGITIMATE PLATFORMS:
+   - Amazon invoices, eBay, Shopify, Square, PayPal receipts
+   - Hotel chains (Marriott, Hilton), airlines
+   - Uber, Lyft, DoorDash receipts
+   - Software/SaaS invoices (Adobe, Microsoft, Google)
+   - These have clean digital formatting - this is NORMAL and LEGITIMATE
 
-AUTOMATIC IMMEDIATE FLAGS (confidence 0.90-0.95):
+3. AUTHENTIC CONTENT:
+   - Specific product descriptions (not "Item 1"): "Syncwire Aux Cable", "iPhone Case", "Room 302"
+   - Real transaction IDs with proper business formatting
+   - Actual order dates and delivery information
+   - Professional invoice structure matching known business templates
 
-These are INSTANT red flags, no further analysis needed:
+4. PROFESSIONAL DIGITAL IS NORMAL:
+   - PDF invoice with clean layout ≠ AI-generated fraud
+   - No camera EXIF is EXPECTED for digital invoices/PDFs
+   - White background is STANDARD for business documents
+   - Professional formatting is LEGITIMATE business practice
 
-1. Placeholder merchant: "SHOP'S NAME", "STORE NAME", "MERCHANT", "BUSINESS NAME", "[anything]", "Business", "Vendor", "Shop", "Store" as main merchant name
+FAKE/AI-GENERATED RED FLAGS (FLAG THESE):
 
-2. Lorem Ipsum text: Any Lorem Ipsum text in ANY field (merchant, address, items) - this is dummy text, not real
+1. PLACEHOLDER/TEMPLATE CONTENT:
+   - Merchant: "SHOP'S NAME", "Store", "Business Name", "Merchant", "[Company]", "Store Name", "Business"
+   - One-word generic names: "Shop", "Store", "Vendor" (vs specific names like "Amazon" or "Starbucks")
+   - Address: "Lorem Ipsum", "123 Main St" only, "12345" as city, obvious placeholders
+   - Items: "Item 1", "Product A", "Service", "Lorem ipsum", "Dolor sit amet", "Purchase"
 
-3. Generic template items: "Item 1", "Item 2", "Product A", "Product B", "Service", "Purchase" - these are placeholders
+2. DUMMY/TEST DATA:
+   - Lorem Ipsum text ANYWHERE (merchant, address, items, any field)
+   - Test patterns: "Test Store", "Sample Restaurant", "Example Corp", "Demo Business"
+   - Fake phone numbers: "123-456-7890", "+1 012 345 67 89", sequential patterns
+   - Placeholder addresses: "Lorem Ipsum, 12345"
 
-4. Test data patterns: "Test", "Sample", "Example", "Demo" in merchant name
+3. AI-PHOTO RED FLAGS (for images claiming to be photos):
+   - Receipt CLAIMS to be a photo but is impossibly perfect (zero blur, noise, or handling marks)
+   - Obvious AI art style (Stable Diffusion aesthetic, Midjourney quality)
+   - Receipt photo but has vector-sharp text quality (impossible with phone cameras)
+   - Perfect background in supposedly casual phone photo
 
-5. Perfect digital rendering: If image shows ZERO signs of being a photo (no texture, perfect background, vector text, zero imperfections)
+4. IMPOSSIBLE BUSINESS DETAILS:
+   - Merchant name doesn't exist (not findable online)
+   - VAT/tax ID format invalid for claimed jurisdiction
+   - Business address doesn't match business type
+   - Phone/email format wrong for claimed country
 
-EVIDENCE TOKENS (use these or create your own):
+ANALYSIS DECISION TREE:
 
-Common AI tells:
-- digital-native, too-perfect-receipt, ai-perfect-symmetry, synthetic-texture, no-paper-texture
-- placeholder-merchant, generic-merchant, test-data, generic-items
-- no-camera-exif, perfect-white-background, vector-sharp-text
-- lorem-ipsum-text, template-format, impossible-perfection
-- ai-lighting, synthetic-shadows, mathematical-spacing
-- stable-diffusion-pattern, midjourney-quality, dall-e-style
+Step 1: Check for INSTANT FAKE indicators
+→ If merchant is "SHOP'S NAME", Lorem Ipsum found, or "Item 1" items → FLAG confidence 0.95
 
-Or describe what you see in your own evidence tokens.
+Step 2: Check for LEGITIMACY indicators
+→ If real business name (Amazon, Uber, etc.) + valid business details → DON'T FLAG, confidence 0.0
+
+Step 3: Assess document type
+→ Digital invoice/PDF from real business → LEGITIMATE, don't flag
+→ Photo claiming to be receipt but looks AI-generated → FLAG
+
+Step 4: Overall assessment
+→ More legitimacy signals than fake signals → Don't flag
+→ More fake signals than legitimacy → Flag
 
 CONFIDENCE SCORING:
 
-Use intuitive assessment, not arithmetic:
+- 0.95: Certain it's fake (SHOP'S NAME, Lorem Ipsum, obvious template)
+- 0.85: Very confident fake (generic merchant, no legitimate business details)
+- 0.75: Likely fake (placeholder patterns, suspicious content)
+- 0.65: Leaning fake (weak business legitimacy, some red flags)
+- 0.50: Uncertain - CHECK LEGITIMACY INDICATORS FIRST before flagging
+- 0.30: Probably legitimate (has some real business markers)
+- 0.00: Clearly legitimate (known business like Amazon, proper documentation)
 
-- 0.95: Extremely confident it's AI (placeholder merchant, Lorem Ipsum, perfect digital)
-- 0.85: Very confident (multiple AI tells, looks digitally created)
-- 0.75: Confident (suspicious patterns, likely fake)
-- 0.65: Somewhat confident (several weak signals, lean toward fake)
-- 0.50: Uncertain (could go either way - but FLAG anyway to be safe)
-- 0.30: Probably real but has minor oddities
-- 0.00: Clearly a real photo of physical receipt
+FLAGGING THRESHOLD: confidence >= 0.6
 
-Threshold: Flag if confidence >= 0.6 (but you can flag lower if multiple weak signals)
+IMPORTANT EXCEPTIONS - DO NOT FLAG:
 
-IMPORTANT: Use your vision model capabilities - you can see patterns in images that text-based models cannot. Trust your AI training to recognize AI-generated content.
+- Amazon invoices (even if digital/clean)
+- Hotel invoices (Marriott, Hilton, etc.)
+- Airline tickets/receipts
+- Software/SaaS invoices (Adobe, Microsoft, Salesforce)
+- Uber/Lyft/DoorDash receipts
+- Any invoice with valid VAT ID + real business address + known company name
+
+Focus on detecting FRAUDULENT FAKE receipts, not flagging legitimate digital business invoices.
 
 duplicate:
 
