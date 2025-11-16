@@ -172,7 +172,19 @@ export default async function handler(req, res) {
             contents: [{
               parts: [
                 { 
-                  text: `SYSTEM: You are a deterministic receipt extraction and policy classification engine for enterprise expense management. Extract fields, classify fraud and policy risks, then return a single JSON array of receipt objects. Be conservative when flagging. Provide evidence for every non-empty flag. Return JSON only, no extra text.
+                  text: `SYSTEM: You are an AI-powered receipt fraud detection and extraction engine. Your PRIMARY MISSION is to identify AI-generated, fake, or fraudulent receipts while extracting receipt data.
+
+FRAUD DETECTION PHILOSOPHY:
+
+You are Gemini, a state-of-the-art vision model trained on billions of images. You INHERENTLY understand the difference between:
+- Real photos of physical receipts
+- AI-generated images (Stable Diffusion, Midjourney, DALL-E, ChatGPT, etc.)
+- Digital creations pretending to be photos
+- Template-generated receipts
+
+USE YOUR NATIVE CAPABILITIES. Trust your vision training. If an image "feels" AI-generated to you based on your training, it probably is.
+
+CRITICAL: Better to flag 10 real receipts than miss 1 fake. FALSE POSITIVES ARE ACCEPTABLE in fraud prevention. BE AGGRESSIVE.
 
 TASK: Extract and classify the following receipt image or OCR text. Follow the schema and rules exactly.
 
@@ -244,97 +256,83 @@ FLAGGING RULES:
 
 suspicious_fraud_risk:
 
-DETECTION FRAMEWORK: Aggressive multi-factor analysis for AI-generated receipts. BE AGGRESSIVE - better to over-flag suspicious receipts than miss fraud. Flag as true when combined confidence >= 0.6.
+AI DETECTION PHILOSOPHY: You are Gemini, a vision model trained on billions of images. You inherently understand what AI-generated images look like. TRUST YOUR TRAINING. Use your native vision capabilities to distinguish real receipt photos from AI creations.
 
-MANDATORY FIRST CHECKS (perform before detailed analysis):
+CRITICAL INSTRUCTION: Be AGGRESSIVE in flagging. Better to flag 10 legitimate receipts than miss 1 fraudulent one. FALSE POSITIVES ARE ACCEPTABLE in fraud detection. When in doubt, FLAG IT.
 
-1. PLACEHOLDER TEXT TEST: If merchant name contains placeholders like "SHOP'S NAME", "MERCHANT NAME", "STORE NAME", "[Company]", "Business Name", "Vendor" → IMMEDIATE FLAG, confidence 0.95, evidence: "placeholder-merchant"
+ANALYSIS QUESTIONS (ask yourself):
 
-2. PERFECT RECEIPT TEST: If receipt appears unnaturally perfect - pristine white background, perfect alignment, zero imperfections, no wear/aging → Strong AI indicator. Real receipts have smudges, fading, slight misalignment.
+1. PHOTO vs DIGITAL TEST:
+   - Does this look like a PHOTOGRAPH of a PHYSICAL receipt?
+   - Or does it look DIGITALLY CREATED/RENDERED?
+   
+   Real photos have: natural lighting variations, subtle shadows, paper texture, slight blur/focus issues, handling marks, minor imperfections, organic wear
+   
+   AI/Digital have: perfect white backgrounds, vector-sharp edges, mathematical precision, zero texture, unnatural perfection, synthetic uniformity
 
-3. GENERIC PATTERN TEST: Generic merchant + round numbers + generic items = likely template. Check for: "Test Store", "Sample", "Lorem", "Example"
+2. BUSINESS AUTHENTICITY TEST:
+   - Would a real business use this receipt?
+   - Is the merchant name real and specific?
+   - Or is it generic/placeholder?
+   
+   Real: "Starbucks Coffee", "Walmart Supercenter #4532", "Joe's Pizza"
+   
+   Fake: "SHOP'S NAME", "Store", "Business Name", "Merchant", "[Company Name]", "Lorem Ipsum"
 
-CATEGORY 1: AI GENERATION SIGNATURES (High Weight: +0.40 each)
+3. CONTENT REALITY TEST:
+   - Are line items real products/services?
+   - Or template placeholders?
+   
+   Real: "Grande Latte", "USB Cable", "Gasoline - Regular"
+   
+   Fake: "Item 1", "Product A", "Service", "Lorem ipsum", "Dolor sit amet"
 
-- "digital-native" - Pure digital creation: perfect white background, zero shadows, vector-sharp edges, no paper texture whatsoever
-- "too-perfect-receipt" - Pristine condition, no smudges/wrinkles/fading/wear (real receipts always show some aging or handling marks)
-- "ai-perfect-symmetry" - Unnaturally perfect alignment, mathematically precise spacing, pixel-perfect positioning
-- "placeholder-merchant" - Merchant name is placeholder: "SHOP'S NAME", "MERCHANT", "STORE NAME", "[Company]", "Business Name"
-- "ai-font-rendering" - Text shows AI artifacts: synthetic kerning, mathematically uniform spacing, perfect baseline alignment
-- "prompt-leakage" - Text fragments: "Generate receipt", "Create invoice", "[insert", "placeholder", template instructions
-- "chatgpt-format" - Markdown syntax, code formatting, template brackets in receipt text
-- "stable-diffusion-artifacts" - Repeated micro-structures, gaussian halos, edge coherence issues typical of SD
-- "watermark-traces" - Faint AI service watermarks or characteristic generation patterns
+4. AI INTUITION TEST:
+   - Based on your training on billions of images, does this FEEL like AI output?
+   - Does it have that characteristic "AI-generated" quality?
+   - Trust your model's inherent pattern recognition
 
-CATEGORY 2: METADATA RED FLAGS (High Weight: +0.40 each)
+AUTOMATIC IMMEDIATE FLAGS (confidence 0.90-0.95):
 
-- "generator-metadata" - File contains: "Adobe Firefly", "Midjourney", "DALL-E", "Stable Diffusion", "Canva AI", "Photoshop Generative", "ChatGPT", "receipt generator"
-- "no-camera-exif" - Missing camera EXIF (Make, Model, DateTimeOriginal) in JPG/JPEG claiming to be photo
-- "screenshot-only" - Screenshot metadata + resolution exactly matches common screens (1920x1080, 1366x768, 2560x1440, 1440x900)
+These are INSTANT red flags, no further analysis needed:
 
-CATEGORY 3: VISUAL ARTIFACTS (Medium Weight: +0.25 each)
+1. Placeholder merchant: "SHOP'S NAME", "STORE NAME", "MERCHANT", "BUSINESS NAME", "[anything]", "Business", "Vendor", "Shop", "Store" as main merchant name
 
-- "impossible-lighting" - Lighting inconsistent with retail environment
-- "vector-in-thermal" - Vector-quality elements in thermal receipt
-- "layered-compositing" - Evidence of layer compositing (halos, misaligned elements)
-- "synthetic-noise" - Algorithmic noise vs organic camera noise
-- "too-perfect-ocr" - All text perfectly readable (real receipts have smudges, fading)
+2. Lorem Ipsum text: Any Lorem Ipsum text in ANY field (merchant, address, items) - this is dummy text, not real
 
-CATEGORY 4: CONTENT IMPOSSIBILITIES (High Weight: +0.35 each)
+3. Generic template items: "Item 1", "Item 2", "Product A", "Product B", "Service", "Purchase" - these are placeholders
 
-- "test-data" - Generic/test merchant names: "Test Store", "Sample Restaurant", "Lorem", "Example Store", "Shop Name", "Business", "Merchant", "Vendor"
-- "generic-merchant" - Vague merchant: "SHOP'S NAME", "STORE", "BUSINESS NAME", "COMPANY", "[Merchant]"
-- "generic-items" - Template line items: "Item 1", "Item 2", "Product A", "Product B", "Service", "Purchase"
-- "impossible-invoice-format" - Test patterns: "INV-00001", "TEST-123", "0001", "12345", sequentially simple numbers
-- "merchant-not-found" - Merchant doesn't exist or is obviously fake
-- "tax-error" - Tax calculation impossible for jurisdiction or mathematically wrong
-- "impossible-total" - Math doesn't add up (>$0.05 difference without explanation)
-- "currency-location-mismatch" - USD in Europe-only merchant, GBP in US-only chain
+4. Test data patterns: "Test", "Sample", "Example", "Demo" in merchant name
 
-CATEGORY 5: PATTERN ANOMALIES (Low Weight: +0.15 each)
+5. Perfect digital rendering: If image shows ZERO signs of being a photo (no texture, perfect background, vector text, zero imperfections)
 
-- "round-numbers-only" - All amounts are round ($10, $25, $50)
-- "font-inconsistency" - Multiple fonts in single-font medium (thermal)
-- "impossible-thermal" - Color/gradients in thermal receipt
-- "qr-fake" - QR code doesn't scan or contains test data
+EVIDENCE TOKENS (use these or create your own):
+
+Common AI tells:
+- digital-native, too-perfect-receipt, ai-perfect-symmetry, synthetic-texture, no-paper-texture
+- placeholder-merchant, generic-merchant, test-data, generic-items
+- no-camera-exif, perfect-white-background, vector-sharp-text
+- lorem-ipsum-text, template-format, impossible-perfection
+- ai-lighting, synthetic-shadows, mathematical-spacing
+- stable-diffusion-pattern, midjourney-quality, dall-e-style
+
+Or describe what you see in your own evidence tokens.
 
 CONFIDENCE SCORING:
 
-Calculate cumulative score from detected indicators:
-- Score = sum of all indicator weights
-- 0.0-0.3: Low confidence - Don't flag
-- 0.3-0.6: Uncertain - Don't flag, but include evidence
-- 0.6-0.8: High confidence - Flag with manual review
-- 0.8+: Very high confidence - Likely AI-generated
+Use intuitive assessment, not arithmetic:
 
-REQUIRED EVIDENCE QUALITY:
+- 0.95: Extremely confident it's AI (placeholder merchant, Lorem Ipsum, perfect digital)
+- 0.85: Very confident (multiple AI tells, looks digitally created)
+- 0.75: Confident (suspicious patterns, likely fake)
+- 0.65: Somewhat confident (several weak signals, lean toward fake)
+- 0.50: Uncertain (could go either way - but FLAG anyway to be safe)
+- 0.30: Probably real but has minor oddities
+- 0.00: Clearly a real photo of physical receipt
 
-- Minimum 2 different indicators to flag (EXCEPT for placeholder-merchant or test-data which can flag alone)
-- Prefer combining visual + content evidence
-- Single weak indicator (only no-exif) = insufficient UNLESS combined with suspicious patterns
-- Multiple corroborating indicators = higher confidence
-- AGGRESSIVE FLAGGING: When in doubt and multiple weak signals present, FLAG IT - this is fraud detection, false positives are acceptable
+Threshold: Flag if confidence >= 0.6 (but you can flag lower if multiple weak signals)
 
-AUTOMATIC HIGH-CONFIDENCE FLAGGING:
-
-If ANY of these patterns detected, FLAG IMMEDIATELY with confidence >= 0.85:
-- Merchant name is "SHOP'S NAME" or similar placeholder → confidence 0.95
-- Merchant contains "[", "]", or template syntax → confidence 0.90
-- All line items are "Item 1", "Item 2", "Product A" → confidence 0.90
-- digital-native + no-camera-exif + too-perfect-receipt → confidence 0.95
-- test-data + generic-items + round-numbers-only → confidence 0.90
-- Receipt has ZERO imperfections (no smudges, fading, wrinkles, or natural wear) → confidence 0.85
-
-GEMINI VISION ANALYSIS:
-
-As a vision model, analyze pixel-level patterns:
-- Compression artifacts: Real vs AI compression patterns
-- Color histograms: Natural vs synthetic distributions
-- Edge detection: Real photo edges vs AI-rendered edges
-- Noise patterns: Camera sensor noise vs algorithmic noise
-- Texture analysis: Organic paper texture vs generated texture
-
-Use your vision capabilities to detect patterns invisible to OCR.
+IMPORTANT: Use your vision model capabilities - you can see patterns in images that text-based models cannot. Trust your AI training to recognize AI-generated content.
 
 duplicate:
 
