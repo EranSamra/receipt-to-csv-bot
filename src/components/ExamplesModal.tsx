@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Check, Eye } from "lucide-react";
+import { X, Check, Eye, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -290,7 +290,8 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
               disabled={selectedReceipts.length === 0}
               className="flex-1 bg-[#14b8a6] hover:bg-[#0d9488] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 order-1 sm:order-2"
             >
-              Load Selected ({selectedReceipts.length})
+              <Sparkles className="h-5 w-5 mr-3" />
+              Extract Data
             </Button>
           </div>
         </div>

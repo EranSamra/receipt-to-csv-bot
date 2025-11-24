@@ -807,9 +807,13 @@ const Index = () => {
 
   const handleLoadSelectedExamples = (files: File[]) => {
     setSelectedFiles(files);
+    // Automatically start extraction after loading files
+    setIsProcessing(true);
+    setShowMeshScanner(true);
+    setShowParticleEffect(false);
     toast({
-      title: "Examples Loaded",
-      description: `Loaded ${files.length} sample receipt${files.length > 1 ? 's' : ''} for testing`,
+      title: "Starting extraction",
+      description: `Extracting data from ${files.length} sample receipt${files.length > 1 ? 's' : ''}...`,
     });
   };
 

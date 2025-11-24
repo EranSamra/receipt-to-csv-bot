@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="meshGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2dd4bf;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d9488;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Three interconnected parallelograms forming "M" shape with rounded corners -->
+  <!-- Left parallelogram -->
+  <path d="M 15 45 Q 15 40 20 40 L 32 40 L 45 75 Q 45 80 40 80 L 28 80 Q 20 80 20 75 Z" 
+        fill="url(#meshGradient)" opacity="0.95"/>
+  
+  <!-- Center parallelogram (slightly offset upward) -->
+  <path d="M 35 30 Q 35 25 40 25 L 55 25 L 70 80 Q 70 85 65 85 L 50 85 Q 40 85 40 80 Z" 
+        fill="url(#meshGradient)" opacity="0.95"/>
+  
+  <!-- Right parallelogram -->
+  <path d="M 60 45 Q 60 40 65 40 L 77 40 L 90 75 Q 90 80 85 80 L 73 80 Q 65 80 65 75 Z" 
+        fill="url(#meshGradient)" opacity="0.95"/>
+</svg>

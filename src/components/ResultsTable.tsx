@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export interface LineItem {
   description: string;
@@ -48,8 +48,37 @@ interface ResultsTableProps {
 export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
   if (data.length === 0) return null;
 
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  // Initialize with all rows that have line items already expanded
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(() => {
+    const initialExpanded = new Set<number>();
+    data.forEach((row, index) => {
+      if (row.lineItems && row.lineItems.length > 0) {
+        initialExpanded.add(index);
+      }
+    });
+    return initialExpanded;
+  });
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
+
+  // Update expanded rows when data changes (e.g., new receipts added)
+  useEffect(() => {
+    const newExpanded = new Set<number>();
+    data.forEach((row, index) => {
+      if (row.lineItems && row.lineItems.length > 0) {
+        newExpanded.add(index);
+      }
+    });
+    // Only update if there are changes
+    const currentSize = expandedRows.size;
+    const newSize = newExpanded.size;
+    const hasChanges = currentSize !== newSize || 
+      Array.from(newExpanded).some(idx => !expandedRows.has(idx));
+    
+    if (hasChanges) {
+      setExpandedRows(newExpanded);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.length]); // Only update when number of receipts changes
 
   const toggleRow = (index: number) => {
     const newExpanded = new Set(expandedRows);
