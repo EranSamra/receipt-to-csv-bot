@@ -1,0 +1,168 @@
+/* Modern Dashboard Styles */
+
+/* Aurora Backgrounds */
+.aurora-bg-1 {
+  background: radial-gradient(circle at top left, rgba(20, 184, 166, 0.15), transparent 40%);
+}
+.aurora-bg-2 {
+  background: radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.15), transparent 40%);
+}
+.aurora-bg-3 {
+  background: radial-gradient(circle at center, rgba(168, 85, 247, 0.1), transparent 50%);
+}
+
+/* Glass Cards (Bento Style) */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.glass-panel:hover {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 40px rgba(20, 184, 166, 0.08);
+  transform: translateY(-2px);
+  border-color: rgba(20, 184, 166, 0.2);
+}
+
+/* Floating Table Rows */
+.floating-row {
+  background: white;
+  border: 1px solid #f3f4f6;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.floating-row:hover {
+  transform: scale-[1.005] translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  border-color: #ccfbf1; /* Turquoise-100 */
+  z-index: 10;
+}
+
+.floating-row td {
+  border-bottom: none !important;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.floating-row td:first-child {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.floating-row td:last-child {
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+/* Tech Badges */
+.tech-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: all 0.2s;
+}
+
+.tech-badge-error {
+  background: rgba(254, 226, 226, 0.6);
+  color: #991b1b;
+  border: 1px solid rgba(252, 165, 165, 0.4);
+}
+
+.tech-badge-warning {
+  background: rgba(254, 243, 199, 0.6);
+  color: #92400e;
+  border: 1px solid rgba(252, 211, 77, 0.4);
+}
+
+.tech-badge-success {
+  background: rgba(209, 250, 229, 0.6);
+  color: #065f46;
+  border: 1px solid rgba(110, 231, 183, 0.4);
+}
+
+/* Animated Counter */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count {
+  animation: countUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scan Line Animation for Insights */
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #14b8a6, transparent);
+  animation: scan 2s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes scan {
+  0% { top: 0; opacity: 0; }
+  10% { opacity: 0.5; }
+  90% { opacity: 0.5; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* Insights Bar Grid */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+/* Line Item "Ticket" Style */
+.line-item-row {
+  background: #f8fafc;
+  position: relative;
+}
+
+.line-item-row td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.line-item-connector {
+  position: absolute;
+  left: 24px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e2e8f0;
+}
+
+/* Custom Scrollbar for Table Container */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 20px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.5);
+}
+

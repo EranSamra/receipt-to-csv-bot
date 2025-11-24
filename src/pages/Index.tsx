@@ -587,7 +587,7 @@ const Index = () => {
           const contentType = response.headers.get('content-type') || '';
           
           if (contentType.includes('application/json')) {
-            const errorData = await response.json();
+        const errorData = await response.json();
             
             // Safely extract error message
             if (typeof errorData === 'string') {
@@ -633,8 +633,8 @@ const Index = () => {
         // Validate response structure
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid response format from server');
-        }
-        
+      }
+
         if (!data.csv || typeof data.csv !== 'string') {
           throw new Error('No CSV data received from server');
         }
@@ -818,7 +818,17 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen mesh-gradient-dark">
+    <div className="min-h-screen bg-gray-50 relative">
+      {/* Aurora Background Effects */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-0 w-[800px] h-[800px] aurora-bg-1 blur-[100px] opacity-40 animate-pulse"></div>
+        <div className="absolute bottom-0 right-0 w-[800px] h-[800px] aurora-bg-2 blur-[100px] opacity-40 animate-pulse animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] aurora-bg-3 blur-[100px] opacity-30"></div>
+      </div>
+
+      {/* Content Wrapper */}
+      <div className="relative z-10">
+      
       {/* Particle Text Effect Overlay */}
       {showParticleEffect && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
@@ -869,14 +879,14 @@ const Index = () => {
 
         <div className="relative container mx-auto px-4 py-20">
           <div className="max-w-6xl mx-auto">
-            {/* Header */}
+      {/* Header */}
             <header className="text-center mb-16">
               <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-8 mesh-fade-in`}>
                 <div className="p-2 bg-turquoise-500 rounded-lg">
                   <Receipt className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-white font-medium">Powered by Mesh AI</span>
-              </div>
+            </div>
               
               <h1 className={`mesh-heading-xl mb-6 ${animateHero ? 'mesh-fade-in' : 'opacity-0'}`}>
                 Receipt Data Extractor
@@ -896,13 +906,13 @@ const Index = () => {
                 <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-sm border border-white/20">
                   <Shield className="h-4 w-4 text-turquoise-400" />
                   <span className="text-white text-sm font-medium">Secure</span>
-                </div>
+            </div>
                 <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-sm border border-white/20">
                   <Brain className="h-4 w-4 text-turquoise-400" />
                   <span className="text-white text-sm font-medium">Smart Extraction</span>
-                </div>
-              </div>
-            </header>
+          </div>
+        </div>
+      </header>
 
             {/* Main Upload Cards */}
             <div className={`max-w-6xl mx-auto ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.6s' }}>
@@ -911,11 +921,11 @@ const Index = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
                   {/* Upload Files Card */}
                   <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl">
-                    <ReceiptUpload
-                      onFilesSelected={setSelectedFiles}
-                      selectedFiles={selectedFiles}
-                      onRemoveFile={handleRemoveFile}
-                    />
+            <ReceiptUpload
+              onFilesSelected={setSelectedFiles}
+              selectedFiles={selectedFiles}
+              onRemoveFile={handleRemoveFile}
+            />
                   </div>
                   
                   {/* Examples Card */}
@@ -936,12 +946,12 @@ const Index = () => {
                     onClearFiles={handleClearFiles}
                     extractButton={
                       <div className="space-y-6">
-                        <Button
-                          onClick={handleProcess}
-                          disabled={isProcessing}
-                          size="lg"
+                  <Button
+                    onClick={handleProcess}
+                    disabled={isProcessing}
+                    size="lg"
                           className="bg-[#14b8a6] hover:bg-[#0d9488] text-white font-semibold text-lg px-12 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                        >
+                  >
                           {isProcessing ? (
                             <>
                               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
@@ -953,7 +963,7 @@ const Index = () => {
                               Extract Data
                             </>
                           )}
-                        </Button>
+                  </Button>
 
                         {isProcessing && (
                           <div className="space-y-4">
@@ -986,8 +996,8 @@ const Index = () => {
             <div className="absolute inset-0 opacity-5">
               <div className="absolute top-10 right-10 w-32 h-32 bg-turquoise-500 rounded-full mix-blend-multiply filter blur-xl"></div>
               <div className="absolute bottom-10 left-10 w-24 h-24 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl"></div>
-            </div>
-            
+                </div>
+                
             <div className="container mx-auto px-4 relative">
               <div className="max-w-6xl mx-auto">
                 {/* Receipt Extraction Output Section */}
