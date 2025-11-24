@@ -75,7 +75,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full flex flex-col">
       {/* Hidden File Input */}
           <input
             id="file-upload"
@@ -95,7 +95,7 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 md:p-12 text-center mesh-transition cursor-pointer ${
+          className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 md:p-12 text-center mesh-transition cursor-pointer flex-1 flex flex-col justify-center ${
             isDragging
               ? "border-turquoise-400 bg-turquoise-50 scale-[1.02] mesh-shadow-turquoise"
               : isHovered
@@ -112,18 +112,18 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
 
           <div className="relative">
             {/* Upload Icon */}
-            <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-turquoise-100 to-turquoise-200 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 mesh-float">
+            <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-turquoise-100 to-turquoise-200 rounded-2xl flex items-center justify-center mb-5 sm:mb-6 mesh-float">
               <Upload className="h-8 w-8 sm:h-10 sm:w-10 text-turquoise-600" />
             </div>
 
             {/* Main Text */}
-            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 mb-2 sm:mb-3">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 mb-4 sm:mb-5">
               Drag & drop / Upload your receipts
             </h3>
             
 
             {/* File Count */}
-            <p className="text-xs sm:text-sm text-gray-500 mt-4 sm:mt-6 px-2">
+            <p className="text-sm sm:text-base md:text-lg text-gray-500 px-2 leading-relaxed">
               Up to 30 files • Supports JPG, JPEG, PNG, WEBP, HEIC, PDF formats • Large images will be automatically compressed
           </p>
           </div>

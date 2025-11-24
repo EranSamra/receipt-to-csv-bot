@@ -818,17 +818,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
-      {/* Aurora Background Effects */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 left-0 w-[800px] h-[800px] aurora-bg-1 blur-[100px] opacity-40 animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 w-[800px] h-[800px] aurora-bg-2 blur-[100px] opacity-40 animate-pulse animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] aurora-bg-3 blur-[100px] opacity-30"></div>
-      </div>
-
-      {/* Content Wrapper */}
-      <div className="relative z-10">
-      
+    <div className="min-h-screen mesh-gradient-dark">
       {/* Particle Text Effect Overlay */}
       {showParticleEffect && (
         <div className="fixed inset-0 z-40 flex items-center justify-center">
@@ -879,11 +869,11 @@ const Index = () => {
 
         <div className="relative container mx-auto px-4 py-20">
           <div className="max-w-6xl mx-auto">
-      {/* Header */}
-            <header className="text-center mb-16">
-              <div className={`inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-8 mesh-fade-in`}>
-                <div className="p-2 bg-turquoise-500 rounded-lg">
-                  <Receipt className="h-5 w-5 text-white" />
+            {/* Header */}
+            <header className="text-center mb-12">
+              <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 mesh-fade-in`}>
+                <div className="p-1.5 bg-turquoise-500 rounded-full flex items-center justify-center">
+                  <Receipt className="h-6 w-6 text-white" />
                 </div>
                 <span className="text-white font-medium">Powered by Mesh AI</span>
             </div>
@@ -892,10 +882,14 @@ const Index = () => {
                 Receipt Data Extractor
               </h1>
               
-              <p className={`mesh-text-lg max-w-3xl mx-auto mb-8 ${animateHero ? 'mesh-slide-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
-                Upload your receipts and instantly convert them into structured expense data powered by AI. 
-                <span className="text-turquoise-400 font-semibold"> Accurate. Secure. Built for Finance Teams.</span>
-              </p>
+              <div className={`mesh-text-lg max-w-3xl mx-auto mb-10 ${animateHero ? 'mesh-slide-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+                <p className="mb-4 leading-relaxed">
+                  Upload your receipts and instantly convert them into structured expense data powered by AI.
+                </p>
+                <p className="leading-relaxed">
+                  <span className="text-turquoise-400 font-semibold">Accurate. Secure. Built for Finance Teams.</span>
+                </p>
+              </div>
 
               {/* Feature Pills */}
               <div className={`flex flex-wrap justify-center gap-4 mb-12 ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.4s' }}>
@@ -918,9 +912,9 @@ const Index = () => {
             <div className={`max-w-6xl mx-auto ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.6s' }}>
               {selectedFiles.length === 0 ? (
                 // Two cards side by side when no files selected
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-stretch">
                   {/* Upload Files Card */}
-                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl">
+                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl h-full flex flex-col">
             <ReceiptUpload
               onFilesSelected={setSelectedFiles}
               selectedFiles={selectedFiles}
@@ -929,7 +923,7 @@ const Index = () => {
                   </div>
                   
                   {/* Examples Card */}
-                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl">
+                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl h-full flex flex-col">
                     <ExamplesUpload
                       onOpenModal={handleOpenExamplesModal}
                       isProcessing={isProcessing}
@@ -1042,9 +1036,14 @@ const Index = () => {
       {/* Footer */}
       <footer className="py-12 bg-gray-900">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-gray-400">
-            Built with ❤️ using Mesh AI Extraction Engine
-          </p>
+          <div className="space-y-2">
+            <p className="text-white text-xl md:text-2xl font-bold">
+              <span className="ml-4">Built with</span> <span className="text-red-500">❤️</span>
+            </p>
+            <p className="text-gray-400 text-sm md:text-base">
+              Using Mesh AI Extraction Engine
+            </p>
+          </div>
         </div>
       </footer>
 

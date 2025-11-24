@@ -14,7 +14,7 @@ export const ExamplesUpload = ({ onOpenModal, isProcessing }: ExamplesUploadProp
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => { if (!isProcessing) onOpenModal(); }}
-      className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 md:p-12 text-center mesh-transition cursor-pointer ${
+      className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 md:p-12 text-center mesh-transition cursor-pointer flex-1 flex flex-col justify-center ${
         isHovered
           ? "border-gray-400 bg-gray-50 scale-[1.02] mesh-shadow-lg"
           : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
@@ -41,21 +41,21 @@ export const ExamplesUpload = ({ onOpenModal, isProcessing }: ExamplesUploadProp
 
       <div className="relative">
         {/* Examples Icon */}
-        <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 mesh-float">
+        <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mb-5 sm:mb-6 mesh-float">
           <FolderOpen className="h-8 w-8 sm:h-10 sm:w-10 text-gray-600" />
         </div>
 
         {/* Main Text */}
-        <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 mb-2 sm:mb-3">
+        <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 mb-4 sm:mb-5">
           Select Examples
         </h3>
         
-        <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base md:text-lg px-2">
+        <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base md:text-lg px-2 leading-relaxed">
           Load sample receipts to test the extraction
         </p>
 
         {/* Clickable Hint */}
-        <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-base md:text-lg px-2">
+        <p className="text-gray-600 text-sm sm:text-base md:text-lg px-2 leading-relaxed">
           Click to browse 10 sample receipts
         </p>
       </div>
