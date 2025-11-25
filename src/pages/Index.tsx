@@ -16,6 +16,9 @@ import { SendCSVModal } from "@/components/SendCSVModal";
 import { compressImageIfNeeded } from "@/utils/imageCompression";
 import { MeshHeroCTA } from "@/components/MeshHeroCTA";
 import { convertPDFToImage } from "@/utils/pdfConverter";
+import { useAuth } from "@/contexts/AuthContext";
+import { LoginModal } from "@/components/LoginModal";
+import { UserMenu } from "@/components/UserMenu";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -32,7 +35,10 @@ const Index = () => {
   const [showScanModal, setShowScanModal] = useState(false);
   const [showMeshScanner, setShowMeshScanner] = useState(false);
   const [showSendCSVModal, setShowSendCSVModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const { toast } = useToast();
+  const { user, loading: authLoading, isBusinessEmail, signOut } = useAuth();
 
   // Trigger animations on mount
   useEffect(() => {
@@ -65,6 +71,32 @@ const Index = () => {
       console.warn(`[Index] WARNING: Results were cleared but showResults is still true!`);
     }
   }, [results, showResults]);
+
+  // Validate business email after authentication and continue with extraction
+  useEffect(() => {
+    if (user?.email) {
+      if (!isBusinessEmail(user.email)) {
+        toast({
+          title: "Business email required",
+          description: "Please sign in with a business email address. Personal emails are not allowed.",
+          variant: "destructive",
+        });
+        signOut();
+        if (pendingFiles) {
+          setShowLoginModal(true);
+        }
+      } else if (pendingFiles && pendingFiles.length > 0) {
+        // User successfully logged in with business email, continue with extraction
+        console.log('[Index] User authenticated, continuing with extraction');
+        const filesToProcess = [...pendingFiles];
+        setSelectedFiles(filesToProcess);
+        setPendingFiles(null);
+        setIsProcessing(true);
+        setShowMeshScanner(true);
+        setShowParticleEffect(false);
+      }
+    }
+  }, [user, isBusinessEmail, signOut, toast, pendingFiles]);
   
   // Ensure selectedFiles persist after scanning completes
   // This is critical for blob URL validity
@@ -466,7 +498,50 @@ const Index = () => {
       return;
     }
 
-    console.log(`[Index] handleProcess: Starting processing for ${selectedFiles.length} files`);
+    // Check authentication only when user uploads their own files (not examples)
+    if (!user) {
+      // Save files for later processing after login
+      setPendingFiles([...selectedFiles]);
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Validate business email
+    if (user.email && !isBusinessEmail(user.email)) {
+      toast({
+        title: "Business email required",
+        description: "Please sign in with a business email address. Personal emails are not allowed.",
+        variant: "destructive",
+      });
+      signOut();
+      setPendingFiles([...selectedFiles]);
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Proceed with extraction
+    proceedWithExtraction();
+  };
+
+  const proceedWithExtraction = () => {
+    const filesToProcess = pendingFiles || selectedFiles;
+    
+    if (filesToProcess.length === 0) {
+      toast({
+        title: "No files selected",
+        description: "Please upload at least one receipt image",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If we have pending files, update selectedFiles
+    if (pendingFiles) {
+      setSelectedFiles([...pendingFiles]);
+      setPendingFiles(null);
+    }
+
+    console.log(`[Index] proceedWithExtraction: Starting processing for ${filesToProcess.length} files`);
     setIsProcessing(true);
     setShowMeshScanner(true);
     setShowParticleEffect(false);
@@ -808,6 +883,7 @@ const Index = () => {
   const handleLoadSelectedExamples = (files: File[]) => {
     setSelectedFiles(files);
     // Automatically start extraction after loading files
+    // NOTE: Examples don't require authentication - they're for testing
     setIsProcessing(true);
     setShowMeshScanner(true);
     setShowParticleEffect(false);
@@ -871,6 +947,11 @@ const Index = () => {
           <div className="max-w-6xl mx-auto">
             {/* Header */}
             <header className="text-center mb-12">
+              {/* User Menu - Top Right */}
+              <div className="flex justify-end mb-4">
+                <UserMenu />
+              </div>
+              
               <div className={`inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 mesh-fade-in`}>
                 <div className="p-1.5 bg-turquoise-500 rounded-full flex items-center justify-center">
                   <Receipt className="h-6 w-6 text-white" />
@@ -1074,6 +1155,24 @@ const Index = () => {
         isOpen={showSendCSVModal}
         onClose={() => setShowSendCSVModal(false)}
         extractedRows={results}
+      />
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => {
+          setShowLoginModal(false);
+          // If user closes modal without logging in, clear pending files
+          if (pendingFiles && !user) {
+            setPendingFiles(null);
+            setSelectedFiles([]);
+          }
+        }}
+        onSuccess={() => {
+          // User successfully logged in, can now proceed with upload
+          // The useEffect will handle continuing with extraction
+          console.log('[Index] User logged in successfully, will continue with extraction');
+        }}
       />
     </div>
   );
