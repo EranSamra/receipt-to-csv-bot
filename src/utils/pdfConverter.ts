@@ -117,10 +117,11 @@ export async function convertPDFToImage(
     }
     
     // Render PDF page to canvas
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport,
-    };
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas,
+      };
     
     await page.render(renderContext).promise;
     console.log(`[PDFConverter] PDF rendered to canvas: ${canvas.width}x${canvas.height}`);
