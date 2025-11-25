@@ -166,9 +166,10 @@ serve(async (req) => {
         
       } catch (error) {
         console.error(`Error processing file ${file.name}:`, error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         results.push({
           filename: file.name,
-          error: error.message
+          error: errorMessage
         });
       }
     }
