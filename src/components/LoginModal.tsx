@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { X, AlertCircle, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { X, AlertCircle, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -9,121 +13,91 @@ interface LoginModalProps {
 }
 
 export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wcElementRef = useRef<HTMLElement | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-  const [scriptError, setScriptError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [loading, setLoading] = useState(false);
+  
+  const { signIn, signUp, isBusinessEmail } = useAuth();
 
-  // Check if Descope script is loaded
-  useEffect(() => {
-    const checkScript = () => {
-      // Check if custom element is defined (means script loaded)
-      if (customElements.get('descope-wc')) {
-        console.log('[LoginModal] Descope script loaded successfully');
-        setScriptLoaded(true);
-        setScriptError(false);
-        return true;
-      }
+  const validateEmail = (email: string) => {
+    if (!email) {
+      setEmailError("");
       return false;
-    };
+    }
 
-    // Check immediately
-    if (checkScript()) return;
+    if (!email.includes("@")) {
+      setEmailError("Please enter a valid email address");
+      return false;
+    }
 
-    // Check if script tag exists
-    const scriptTag = document.querySelector('script[src*="descope"]');
-    if (!scriptTag) {
-      console.error('[LoginModal] Descope script tag not found in DOM');
-      setScriptError(true);
+    if (!isBusinessEmail(email)) {
+      setEmailError("Personal email addresses (Gmail, Yahoo, etc.) are not allowed. Please use your business email.");
+      return false;
+    }
+
+    setEmailError("");
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    if (newEmail) {
+      validateEmail(newEmail);
+    } else {
+      setEmailError("");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!validateEmail(email)) {
       return;
     }
 
-    // Wait for script to load
-    const maxRetries = 20; // 10 seconds max
-    let retries = 0;
-    const interval = setInterval(() => {
-      retries++;
-      if (checkScript()) {
-        clearInterval(interval);
-      } else if (retries >= maxRetries) {
-        console.error('[LoginModal] Descope script failed to load after timeout');
-        clearInterval(interval);
-        setScriptError(true);
-      }
-    }, 500);
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
 
-    return () => clearInterval(interval);
-  }, [retryCount]);
+    setLoading(true);
 
-  useEffect(() => {
-    if (isOpen && containerRef.current && scriptLoaded) {
-      // Create Descope web component if it doesn't exist
-      let wcElement = document.getElementsByTagName('descope-wc')[0] as HTMLElement;
-      
-      if (!wcElement) {
-        try {
-          wcElement = document.createElement('descope-wc') as HTMLElement;
-          wcElement.setAttribute('project-id', 'P35v4osxBEfKnEOpBAH5xwKj8b3M');
-          wcElement.setAttribute('flow-id', 'sign-in');
-          wcElement.setAttribute('theme', 'light');
-          containerRef.current.appendChild(wcElement);
-          console.log('[LoginModal] Descope web component created');
-        } catch (error) {
-          console.error('[LoginModal] Error creating Descope component:', error);
-          setScriptError(true);
+    try {
+      const { error: authError } = isSignUp 
+        ? await signUp(email, password)
+        : await signIn(email, password);
+
+      if (authError) {
+        if (authError.message.includes("Invalid login credentials")) {
+          setError("Invalid email or password");
+        } else if (authError.message.includes("User already registered")) {
+          setError("This email is already registered. Please sign in instead.");
+        } else {
+          setError(authError.message);
         }
       } else {
-        // Move existing element to container
-        containerRef.current.appendChild(wcElement);
-        console.log('[LoginModal] Using existing Descope component');
+        if (onSuccess) {
+          onSuccess();
+        }
+        onClose();
       }
-      
-      wcElementRef.current = wcElement;
-      wcElement.style.display = 'block';
-    } else if (!isOpen && wcElementRef.current) {
-      // Hide component when modal closes
-      wcElementRef.current.style.display = 'none';
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
-  }, [isOpen, scriptLoaded]);
-
-  useEffect(() => {
-    const wcElement = wcElementRef.current || document.getElementsByTagName('descope-wc')[0];
-    if (!wcElement) return;
-
-    const onSuccessHandler = (e: CustomEvent) => {
-      console.log('[LoginModal] Descope success:', e.detail);
-      if (onSuccess) {
-        onSuccess();
-      }
-      onClose();
-    };
-
-    const onErrorHandler = (err: CustomEvent) => {
-      console.error('[LoginModal] Descope error:', err);
-      setScriptError(true);
-    };
-
-    wcElement.addEventListener('success', onSuccessHandler as EventListener);
-    wcElement.addEventListener('error', onErrorHandler as EventListener);
-
-    return () => {
-      wcElement.removeEventListener('success', onSuccessHandler as EventListener);
-      wcElement.removeEventListener('error', onErrorHandler as EventListener);
-    };
-  }, [onClose, onSuccess]);
-
-  const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
-    setScriptError(false);
-    setScriptLoaded(false);
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative">
+      <div className="bg-background rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative border border-border">
         <Button
           variant="ghost"
           size="sm"
@@ -133,49 +107,91 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
           <X className="h-4 w-4" />
         </Button>
 
-        <h2 className="text-2xl font-bold mb-4 text-gray-800">Sign In Required</h2>
-        <p className="text-gray-600 mb-2">
-          Please sign in with your <strong>business email</strong> to upload and process receipts.
+        <h2 className="text-2xl font-bold mb-2 text-foreground">
+          {isSignUp ? "Create Account" : "Sign In"}
+        </h2>
+        <p className="text-muted-foreground mb-2">
+          Please use your <strong>business email</strong> to access receipt processing.
         </p>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-muted-foreground mb-6">
           Personal email addresses (Gmail, Yahoo, etc.) are not accepted.
         </p>
 
-        <div ref={containerRef} className="min-h-[400px]">
-          {scriptError ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                Failed to load authentication
-              </h3>
-              <p className="text-sm text-gray-600 mb-4 max-w-sm">
-                The authentication service couldn't be loaded. This might be due to:
-              </p>
-              <ul className="text-xs text-gray-500 mb-6 text-left list-disc list-inside space-y-1">
-                <li>Network connectivity issues</li>
-                <li>Firewall or proxy blocking the request</li>
-                <li>Script loading timeout</li>
-              </ul>
-              <Button onClick={handleRetry} variant="outline" className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Retry
-              </Button>
-              <p className="text-xs text-gray-400 mt-4">
-                Running locally? Make sure you have internet connection and Descope allows localhost.
-              </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Business Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={handleEmailChange}
+                className="pl-10"
+                required
+              />
             </div>
-          ) : !scriptLoaded ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <RefreshCw className="h-8 w-8 text-gray-400 animate-spin mb-4" />
-              <p className="text-sm text-gray-600">Loading authentication...</p>
+            {emailError && (
+              <p className="text-sm text-destructive flex items-start gap-1">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{emailError}</span>
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pl-10"
+                required
+                minLength={6}
+              />
             </div>
-          ) : (
-            /* Descope web component will be inserted here */
-            null
+            <p className="text-xs text-muted-foreground">
+              Minimum 6 characters
+            </p>
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || !!emailError || !email || !password}
+          >
+            {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
+          </Button>
+        </form>
+
+        <div className="mt-4 text-center text-sm">
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError("");
+              setEmailError("");
+            }}
+            className="text-primary hover:underline"
+          >
+            {isSignUp 
+              ? "Already have an account? Sign in" 
+              : "Don't have an account? Sign up"}
+          </button>
         </div>
       </div>
     </div>
   );
 };
-
