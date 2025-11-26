@@ -1124,6 +1124,9 @@ const Index = () => {
             <p className="text-gray-400 text-sm md:text-base">
               Using Mesh AI Extraction Engine
             </p>
+            <p className="text-gray-500 text-[10px] mt-4">
+              Demo Use Only: Not for production. Receipt images are immediately discarded after processing. Provided 'as-is' without warranty. Please do not use real financial data
+            </p>
           </div>
         </div>
       </footer>
