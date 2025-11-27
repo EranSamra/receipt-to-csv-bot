@@ -16,6 +16,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useState, useEffect } from "react";
+import { trackEvent, Events } from "@/utils/posthogEvents";
 
 export interface LineItem {
   description: string;
@@ -81,6 +82,13 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
   }, [data.length]); // Only update when number of receipts changes
 
   const toggleRow = (index: number) => {
+    const isExpanding = !expandedRows.has(index);
+    trackEvent(isExpanding ? Events.ROW_EXPANDED : Events.ROW_COLLAPSED, {
+      row_index: index,
+      has_line_items: data[index]?.lineItems?.length > 0,
+      line_item_count: data[index]?.lineItems?.length || 0
+    });
+    
     const newExpanded = new Set(expandedRows);
     if (newExpanded.has(index)) {
       newExpanded.delete(index);
@@ -163,7 +171,15 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
             
             {/* Filter button in same row */}
             <Button
-              onClick={() => setShowFlaggedOnly(!showFlaggedOnly)}
+              onClick={() => {
+                const newValue = !showFlaggedOnly;
+                trackEvent(Events.FILTER_FLAGGED_TOGGLED, {
+                  show_flagged_only: newValue,
+                  total_receipts: data.length,
+                  flagged_count: flaggedCount
+                });
+                setShowFlaggedOnly(newValue);
+              }}
               size="sm"
               variant={showFlaggedOnly ? "default" : "outline"}
               className={`gap-2 flex-shrink-0 ${showFlaggedOnly ? "bg-red-600 hover:bg-red-700 text-white" : "bg-white border-red-400 text-red-700 hover:bg-red-100"}`}
@@ -262,6 +278,11 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                     alt="Receipt" 
                     className="w-20 h-24 object-cover rounded border border-gray-200 flex-shrink-0"
                     onClick={() => {
+                      trackEvent(Events.RECEIPT_IMAGE_VIEWED, {
+                        invoice_number: invoiceNumber || `receipt-${index}`,
+                        view_type: 'mobile'
+                      });
+                      
                       const img = document.createElement('img');
                       img.src = receiptImageUrl;
                       img.style.maxWidth = '90vw';
@@ -415,6 +436,11 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                                 className="w-16 h-20 object-cover rounded border border-gray-200 cursor-pointer hover:border-turquoise-400 transition-colors"
                                 style={{ resize: 'both', minWidth: '60px', minHeight: '80px', maxWidth: '120px', maxHeight: '150px' }}
                                 onClick={(e) => {
+                                  // Track image view
+                                  trackEvent(Events.RECEIPT_IMAGE_VIEWED, {
+                                    invoice_number: invoiceNumber || `receipt-${index}`
+                                  });
+                                  
                                   // Open image in modal or new tab
                                   const img = document.createElement('img');
                                   img.src = receiptImageUrl;

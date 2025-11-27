@@ -19,6 +19,7 @@ import { convertPDFToImage } from "@/utils/pdfConverter";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/LoginModal";
 import { UserMenu } from "@/components/UserMenu";
+import { trackEvent, Events, trackError } from "@/utils/posthogEvents";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -107,10 +108,17 @@ const Index = () => {
   }, [showResults, results.length, selectedFiles.length]);
 
   const handleRemoveFile = (index: number) => {
+    trackEvent(Events.FILE_REMOVED, {
+      file_name: selectedFiles[index]?.name,
+      remaining_files: selectedFiles.length - 1
+    });
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleClearFiles = () => {
+    trackEvent(Events.FILES_CLEARED, {
+      file_count: selectedFiles.length
+    });
     setSelectedFiles([]);
     setShowResults(false);
     setResults([]);
@@ -190,6 +198,13 @@ const Index = () => {
           console.log(`[Index] ✅ PDF converted successfully: ${file.name} -> ${fileToProcess.name}`);
           console.log(`[Index] Converted file details: type=${fileToProcess.type}, size=${(fileToProcess.size / 1024).toFixed(1)}KB`);
           
+          // Track successful PDF conversion
+          trackEvent(Events.PDF_CONVERTED, {
+            file_name: file.name,
+            file_size_kb: (file.size / 1024).toFixed(1),
+            converted_size_kb: (fileToProcess.size / 1024).toFixed(1)
+          });
+          
           // Verify the converted file is valid
           if (!fileToProcess || fileToProcess.size === 0) {
             throw new Error('Converted file is empty');
@@ -204,6 +219,13 @@ const Index = () => {
           const errorMessage = conversionError instanceof Error 
             ? conversionError.message 
             : 'Unknown conversion error';
+          
+          // Track PDF conversion failure
+          trackEvent(Events.PDF_CONVERSION_FAILED, {
+            file_name: file.name,
+            error: errorMessage,
+            file_size_kb: (file.size / 1024).toFixed(1)
+          });
           
           // Check if it's a timeout or critical error
           if (errorMessage.includes('timeout')) {
@@ -231,6 +253,14 @@ const Index = () => {
           fileToProcess = await compressImageIfNeeded(fileToProcess, 1000); // 1000KB = ~1MB
           const compressedSizeMB = fileToProcess.size / (1024 * 1024);
           console.log(`[Index] Compressed ${fileToProcess.name} from ${fileSizeMB.toFixed(2)}MB to ${compressedSizeMB.toFixed(2)}MB`);
+          
+          // Track image compression
+          trackEvent(Events.IMAGE_COMPRESSED, {
+            file_name: fileToProcess.name,
+            original_size_mb: fileSizeMB.toFixed(2),
+            compressed_size_mb: compressedSizeMB.toFixed(2),
+            compression_ratio: ((1 - compressedSizeMB / fileSizeMB) * 100).toFixed(1) + '%'
+          });
         } catch (compressionError) {
           console.warn(`[Index] Compression failed for ${fileToProcess.name}, using original file:`, compressionError);
           // Continue with original file if compression fails
@@ -279,10 +309,22 @@ const Index = () => {
         throw new Error('No valid receipt data extracted');
       }
 
+      // Track successful file processing
+      trackEvent(Events.EXTRACTION_FILE_PROCESSED, {
+        file_name: file.name,
+        receipt_count: parsedResults.length,
+        file_type: file.type
+      });
+
       // Return all parsed results (a single file can produce multiple receipts)
       return { ok: true, data: parsedResults };
     } catch (error: any) {
       console.error('Error extracting receipt:', error);
+      trackError(error, {
+        context: 'extraction',
+        file_name: file.name,
+        file_type: file.type
+      });
       return { ok: false };
     }
   };
@@ -295,6 +337,10 @@ const Index = () => {
     console.log(`[Index] Expected ${selectedFiles.length} files, got ${allResults.length} receipts`);
     
     if (allResults.length === 0) {
+      trackEvent(Events.EXTRACTION_FAILED, {
+        file_count: selectedFiles.length,
+        error: 'no_results_extracted'
+      });
       toast({
         title: "Processing failed",
         description: "No valid receipt data extracted",
@@ -305,6 +351,13 @@ const Index = () => {
       setTimeout(() => setShowMeshScanner(false), 100);
       return;
     }
+    
+    // Track extraction completion
+    trackEvent(Events.EXTRACTION_COMPLETED, {
+      receipt_count: allResults.length,
+      file_count: selectedFiles.length,
+      success: true
+    });
 
     // Create blob URLs for receipt images and map them to invoice numbers
     // CRITICAL: Create blob URLs immediately and store them before scanner closes
@@ -428,6 +481,14 @@ const Index = () => {
     
     const duplicateCount = allResults.filter(r => r["Duplicate"] === "Yes").length;
     console.log(`[Index] Duplicate detection complete: ${duplicateCount} duplicate(s) found in ${allResults.length} receipts`);
+    
+    // Track duplicate detection
+    if (duplicateCount > 0) {
+      trackEvent(Events.DUPLICATES_DETECTED, {
+        duplicate_count: duplicateCount,
+        total_receipts: allResults.length
+      });
+    }
 
     // IMPORTANT: Set results and images BEFORE closing scanner to prevent cleanup issues
     console.log(`[Index] Setting ${allResults.length} results, ${imagesMap.size} image mappings`);
@@ -479,6 +540,10 @@ const Index = () => {
 
   const handleScanError = (error: Error) => {
     console.error('Scan error:', error);
+    trackEvent(Events.EXTRACTION_FAILED, {
+      error: error.message || 'unknown_error',
+      file_count: selectedFiles.length
+    });
     toast({
       title: "Processing failed",
       description: error.message || "Failed to process receipts",
@@ -490,6 +555,7 @@ const Index = () => {
 
   const handleProcess = () => {
     if (selectedFiles.length === 0) {
+      trackEvent(Events.EXTRACTION_STARTED, { file_count: 0, error: 'no_files' });
       toast({
         title: "No files selected",
         description: "Please upload at least one receipt image",
@@ -502,12 +568,14 @@ const Index = () => {
     if (!user) {
       // Save files for later processing after login
       setPendingFiles([...selectedFiles]);
+      trackEvent(Events.LOGIN_MODAL_OPENED, { trigger: 'extraction_required' });
       setShowLoginModal(true);
       return;
     }
 
     // Validate business email
     if (user.email && !isBusinessEmail(user.email)) {
+      trackEvent(Events.LOGIN_FAILED, { reason: 'personal_email' });
       toast({
         title: "Business email required",
         description: "Please sign in with a business email address. Personal emails are not allowed.",
@@ -518,6 +586,13 @@ const Index = () => {
       setShowLoginModal(true);
       return;
     }
+
+    // Track extraction start
+    trackEvent(Events.EXTRACTION_STARTED, {
+      file_count: selectedFiles.length,
+      file_types: selectedFiles.map(f => f.type || 'unknown'),
+      total_size_mb: (selectedFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2)
+    });
 
     // Proceed with extraction
     proceedWithExtraction();
@@ -540,6 +615,14 @@ const Index = () => {
       setSelectedFiles([...pendingFiles]);
       setPendingFiles(null);
     }
+
+    // Track extraction start
+    trackEvent(Events.EXTRACTION_STARTED, {
+      file_count: filesToProcess.length,
+      file_types: filesToProcess.map(f => f.type || 'unknown'),
+      total_size_mb: (filesToProcess.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2),
+      source: pendingFiles ? 'after_login' : 'direct'
+    });
 
     console.log(`[Index] proceedWithExtraction: Starting processing for ${filesToProcess.length} files`);
     setIsProcessing(true);
@@ -866,6 +949,10 @@ const Index = () => {
   const handleDownloadCSV = () => {
     if (results.length === 0) return;
     
+    trackEvent(Events.CSV_DOWNLOADED, {
+      receipt_count: results.length
+    });
+    
     const csv = convertToCSV(results);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csv, `receipts-${timestamp}.csv`);
@@ -877,10 +964,15 @@ const Index = () => {
   };
 
   const handleOpenExamplesModal = () => {
+    trackEvent(Events.EXAMPLES_MODAL_OPENED);
     setShowExamplesModal(true);
   };
 
   const handleLoadSelectedExamples = (files: File[]) => {
+    trackEvent(Events.EXAMPLES_LOADED, {
+      example_count: files.length
+    });
+    
     setSelectedFiles(files);
     // Automatically start extraction after loading files
     // NOTE: Examples don't require authentication - they're for testing
@@ -943,10 +1035,10 @@ const Index = () => {
           <div className="absolute -bottom-8 left-20 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl animate-pulse animation-delay-4000"></div>
         </div>
 
-        <div className="relative container mx-auto px-4 py-20">
+        <div className="relative container mx-auto px-4 py-12">
           <div className="max-w-6xl mx-auto">
             {/* Header */}
-            <header className="text-center mb-12">
+            <header className="text-center mb-8">
               {/* User Menu - Top Right */}
               <div className="flex justify-end mb-4">
                 <UserMenu />
@@ -959,11 +1051,11 @@ const Index = () => {
                 <span className="text-white font-medium">Powered by Mesh AI</span>
             </div>
               
-              <h1 className={`mesh-heading-xl mb-6 ${animateHero ? 'mesh-fade-in' : 'opacity-0'}`}>
+              <h1 className={`mesh-heading-xl mb-4 ${animateHero ? 'mesh-fade-in' : 'opacity-0'}`}>
                 Receipt Data Extractor
               </h1>
               
-              <div className={`mesh-text-lg max-w-3xl mx-auto mb-10 ${animateHero ? 'mesh-slide-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+              <div className={`mesh-text-lg max-w-3xl mx-auto mb-6 ${animateHero ? 'mesh-slide-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
                 <p className="mb-4 leading-relaxed">
                   Upload your receipts and instantly convert them into structured expense data powered by AI.
                 </p>
@@ -973,7 +1065,7 @@ const Index = () => {
               </div>
 
               {/* Feature Pills */}
-              <div className={`flex flex-wrap justify-center gap-4 mb-12 ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.4s' }}>
+              <div className={`flex flex-wrap justify-center gap-4 mb-8 ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.4s' }}>
                 <div className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-sm border border-white/20">
                   <Zap className="h-4 w-4 text-turquoise-400" />
                   <span className="text-white text-sm font-medium">AI-Powered</span>
@@ -993,9 +1085,9 @@ const Index = () => {
             <div className={`max-w-6xl mx-auto ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.6s' }}>
               {selectedFiles.length === 0 ? (
                 // Two cards side by side when no files selected
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-stretch">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-4 lg:gap-6 items-stretch">
                   {/* Upload Files Card */}
-                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl h-full flex flex-col">
+                  <div className="mesh-card p-4 sm:p-5 lg:p-6 mesh-shadow-xl h-full flex flex-col">
             <ReceiptUpload
               onFilesSelected={setSelectedFiles}
               selectedFiles={selectedFiles}
@@ -1004,7 +1096,7 @@ const Index = () => {
                   </div>
                   
                   {/* Examples Card */}
-                  <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl h-full flex flex-col">
+                  <div className="mesh-card p-4 sm:p-5 lg:p-6 mesh-shadow-xl h-full flex flex-col">
                     <ExamplesUpload
                       onOpenModal={handleOpenExamplesModal}
                       isProcessing={isProcessing}
@@ -1013,7 +1105,7 @@ const Index = () => {
                 </div>
               ) : (
                 // Single expanded card when files are selected
-                <div className="mesh-card p-4 sm:p-6 lg:p-8 mesh-shadow-xl">
+                <div className="mesh-card p-4 sm:p-5 lg:p-6 mesh-shadow-xl">
                   <ReceiptUpload
                     onFilesSelected={setSelectedFiles}
                     selectedFiles={selectedFiles}

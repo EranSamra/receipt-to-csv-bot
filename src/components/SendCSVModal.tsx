@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { trackEvent, Events } from '@/utils/posthogEvents';
 
 interface SendCSVModalProps {
   isOpen: boolean;
@@ -24,6 +25,15 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
+
+  // Track modal open
+  useEffect(() => {
+    if (isOpen) {
+      trackEvent(Events.SEND_CSV_MODAL_OPENED, {
+        receipt_count: extractedRows.length
+      });
+    }
+  }, [isOpen, extractedRows.length]);
 
   if (!isOpen) return null;
 
@@ -50,6 +60,11 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
     setError('');
     setIsSending(true);
 
+    trackEvent(Events.SEND_CSV_ATTEMPTED, {
+      email: trimmedEmail,
+      receipt_count: extractedRows.length
+    });
+
     try {
       const API_URL = import.meta.env.DEV 
         ? 'http://localhost:3001/api/send-csv'
@@ -75,11 +90,21 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error('[SendCSVModal] Error response:', errorData);
+        
+        trackEvent(Events.SEND_CSV_FAILED, {
+          error: errorData.error || 'api_error',
+          status: response.status
+        });
+        
         throw new Error(errorData.error || `Server error: ${response.status}`);
       }
 
       const result = await response.json();
       console.log('[SendCSVModal] Success:', result);
+
+      trackEvent(Events.SEND_CSV_SUCCESS, {
+        receipt_count: extractedRows.length
+      });
 
       toast({
         title: 'CSV sent',
@@ -93,6 +118,11 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
       console.error('[SendCSVModal] Error:', e);
       setIsSending(false);
       const errorMessage = e?.message || 'Could not send, try again.';
+      
+      trackEvent(Events.SEND_CSV_FAILED, {
+        error: errorMessage
+      });
+      
       setError(errorMessage);
     }
   };

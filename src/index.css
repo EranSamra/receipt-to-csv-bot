@@ -445,7 +445,7 @@
 
   /* Typography Styles */
   .mesh-heading-xl {
-    @apply text-4xl md:text-5xl lg:text-6xl font-bold text-white;
+    @apply text-4xl md:text-5xl lg:text-5xl font-bold text-white;
     @apply leading-tight tracking-tight;
   }
   

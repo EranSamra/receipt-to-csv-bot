@@ -2,6 +2,7 @@ import { useCallback, useState, useRef } from "react";
 import { Upload, X, FileText, Image, File, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { trackEvent, Events } from "@/utils/posthogEvents";
 
 interface ReceiptUploadProps {
   onFilesSelected: (files: File[]) => void;
@@ -37,6 +38,10 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
       });
       
       if (files.length > 0) {
+        trackEvent(Events.FILE_DROP, {
+          file_count: files.length,
+          file_types: files.map(f => f.type || 'unknown')
+        });
         onFilesSelected([...selectedFiles, ...files].slice(0, 30));
       }
     },
@@ -70,6 +75,11 @@ export const ReceiptUpload = ({ onFilesSelected, selectedFiles, onRemoveFile, on
     });
     
       if (files.length > 0) {
+        trackEvent(Events.FILE_UPLOADED, {
+          file_count: files.length,
+          file_types: files.map(f => f.type || 'unknown'),
+          method: 'file_input'
+        });
         onFilesSelected([...selectedFiles, ...files].slice(0, 30));
       }
   };

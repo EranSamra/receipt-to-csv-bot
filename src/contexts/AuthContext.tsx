@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
+import { trackEvent, Events } from '@/utils/posthogEvents';
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +25,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('[AuthContext] Auth state changed:', event);
+        
+        trackEvent(Events.AUTH_STATE_CHANGED, {
+          event_type: event,
+          has_session: !!session,
+          user_id: session?.user?.id
+        });
+        
         setSession(session);
         setUser(session?.user ?? null);
       }
@@ -61,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    trackEvent(Events.LOGOUT);
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

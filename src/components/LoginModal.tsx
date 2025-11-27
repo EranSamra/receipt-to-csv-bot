@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, AlertCircle, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { trackEvent, Events } from "@/utils/posthogEvents";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -21,6 +22,13 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const [loading, setLoading] = useState(false);
   
   const { signIn, signUp, isBusinessEmail } = useAuth();
+
+  // Track modal open
+  useEffect(() => {
+    if (isOpen) {
+      trackEvent(Events.LOGIN_MODAL_OPENED);
+    }
+  }, [isOpen]);
 
   const validateEmail = (email: string) => {
     if (!email) {
@@ -67,12 +75,24 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
 
     setLoading(true);
 
+    const eventType = isSignUp ? Events.SIGNUP_ATTEMPTED : Events.LOGIN_ATTEMPTED;
+    trackEvent(eventType, {
+      email_domain: email.split('@')[1],
+      is_business_email: isBusinessEmail(email)
+    });
+
     try {
       const { error: authError } = isSignUp 
         ? await signUp(email, password)
         : await signIn(email, password);
 
       if (authError) {
+        const errorEvent = isSignUp ? Events.SIGNUP_FAILED : Events.LOGIN_FAILED;
+        trackEvent(errorEvent, {
+          error_message: authError.message,
+          email_domain: email.split('@')[1]
+        });
+        
         if (authError.message.includes("Invalid login credentials")) {
           setError("Invalid email or password");
         } else if (authError.message.includes("User already registered")) {
@@ -81,12 +101,18 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
           setError(authError.message);
         }
       } else {
+        const successEvent = isSignUp ? Events.SIGNUP_SUCCESS : Events.LOGIN_SUCCESS;
+        trackEvent(successEvent, {
+          email_domain: email.split('@')[1]
+        });
+        
         if (onSuccess) {
           onSuccess();
         }
         onClose();
       }
     } catch (err) {
+      trackEvent(Events.LOGIN_FAILED, { error: 'unexpected_error' });
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);

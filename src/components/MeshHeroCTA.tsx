@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { trackEvent, Events } from '@/utils/posthogEvents';
 
 export const MeshHeroCTA = () => {
   const [email, setEmail] = useState('');
@@ -36,6 +37,11 @@ export const MeshHeroCTA = () => {
 
     setIsSubmitting(true);
 
+    trackEvent(Events.LEAD_FORM_SUBMITTED, {
+      email_domain: email.split('@')[1],
+      has_company: !!company
+    });
+
     try {
       const payload = {
         fields: [
@@ -53,10 +59,17 @@ export const MeshHeroCTA = () => {
 
       if (!res.ok) throw new Error("HubSpot submission failed");
 
+      trackEvent(Events.LEAD_FORM_SUCCESS, {
+        email_domain: email.split('@')[1]
+      });
+
       setMessage("Thanks. We will reach out shortly.");
       setEmail("");
       setCompany("");
     } catch (err) {
+      trackEvent(Events.LEAD_FORM_FAILED, {
+        error: err instanceof Error ? err.message : 'unknown_error'
+      });
       setMessage("Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Check, Eye, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { trackEvent, Events } from "@/utils/posthogEvents";
 
 interface ExampleReceipt {
   id: string;
@@ -94,11 +95,29 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
   const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
   const [previewReceipt, setPreviewReceipt] = useState<ExampleReceipt | null>(null);
 
+  // Track modal open/close
+  useEffect(() => {
+    if (isOpen) {
+      trackEvent(Events.EXAMPLES_MODAL_OPENED);
+    } else {
+      trackEvent(Events.EXAMPLES_MODAL_CLOSED);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const toggleReceipt = (receipt: ExampleReceipt) => {
     // Always update preview when clicking any card
     console.log('Clicking on receipt:', receipt.name, 'Current preview:', previewReceipt?.name);
+    
+    // Track example preview
+    if (previewReceipt?.id !== receipt.id) {
+      trackEvent(Events.EXAMPLE_PREVIEWED, {
+        receipt_id: receipt.id,
+        receipt_name: receipt.name
+      });
+    }
+    
     setPreviewReceipt(receipt);
     setSelectedReceipts(prev => {
       const newSelection = prev.includes(receipt.id)
@@ -131,6 +150,11 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
     }
 
     if (files.length > 0) {
+      trackEvent(Events.EXAMPLES_LOADED, {
+        example_count: files.length,
+        receipt_ids: selectedReceipts
+      });
+      
       onLoadSelected(files);
       onClose();
       setSelectedReceipts([]);
