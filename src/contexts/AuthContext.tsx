@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 ? 'http://localhost:3001/api/notify-signup'
                 : '/api/notify-signup';
               
-              await fetch(API_URL, {
+              const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -62,14 +62,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   userId: session.user.id
                 })
               });
-              console.log('[AuthContext] Signup notification sent to admin');
+              
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              
+              const data = await response.json();
+              console.log('[AuthContext] Signup notification sent to admin:', data);
             } catch (error) {
-              console.error('[AuthContext] Failed to send signup notification:', error);
-              // Don't throw - notification failure shouldn't break signup flow
+              // Silently fail - notification failure shouldn't break signup flow
+              console.warn('[AuthContext] Failed to send signup notification (non-blocking):', error instanceof Error ? error.message : String(error));
             }
           };
           
-          notifyAdmin();
+          // Run notification asynchronously without blocking
+          notifyAdmin().catch(() => {
+            // Already handled in notifyAdmin, just prevent unhandled promise rejection
+          });
         }
         
         setSession(session);

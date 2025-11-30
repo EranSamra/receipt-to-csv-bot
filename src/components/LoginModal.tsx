@@ -112,8 +112,20 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
         onClose();
       }
     } catch (err) {
-      trackEvent(Events.LOGIN_FAILED, { error: 'unexpected_error' });
-      setError("An unexpected error occurred. Please try again.");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('[LoginModal] Authentication error:', err);
+      
+      trackEvent(Events.LOGIN_FAILED, { 
+        error: 'unexpected_error',
+        error_message: errorMessage,
+        error_type: err instanceof Error ? err.constructor.name : 'unknown'
+      });
+      
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        setError("Network error. Please check your connection and try again.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
