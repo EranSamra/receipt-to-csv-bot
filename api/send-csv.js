@@ -112,7 +112,7 @@ export default async function handler(req, res) {
           </p>
 
           <p>
-            Eran Samara<br>
+            Eran Samra<br>
             Product &amp; AI, Mesh Payments
           </p>
         </div>

@@ -794,7 +794,7 @@ app.post('/api/send-csv', async (req, res) => {
           </p>
 
           <p>
-            Eran Samara<br>
+            Eran Samra<br>
             Product &amp; AI, Mesh Payments
           </p>
         </div>
