@@ -16,12 +16,14 @@ interface LoginModalProps {
 export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true); // Default to sign up
+  const [isResetPassword, setIsResetPassword] = useState(false);
   const [error, setError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
   
-  const { signIn, signUp, isBusinessEmail } = useAuth();
+  const { signIn, signUp, resetPassword, isBusinessEmail } = useAuth();
 
   // Track modal open
   useEffect(() => {
@@ -63,53 +65,65 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setResetSuccess(false);
 
     if (!validateEmail(email)) {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
     setLoading(true);
 
-    const eventType = isSignUp ? Events.SIGNUP_ATTEMPTED : Events.LOGIN_ATTEMPTED;
-    trackEvent(eventType, {
-      email_domain: email.split('@')[1],
-      is_business_email: isBusinessEmail(email)
-    });
-
     try {
-      const { error: authError } = isSignUp 
-        ? await signUp(email, password)
-        : await signIn(email, password);
-
-      if (authError) {
-        const errorEvent = isSignUp ? Events.SIGNUP_FAILED : Events.LOGIN_FAILED;
-        trackEvent(errorEvent, {
-          error_message: authError.message,
-          email_domain: email.split('@')[1]
-        });
-        
-        if (authError.message.includes("Invalid login credentials")) {
-          setError("Invalid email or password");
-        } else if (authError.message.includes("User already registered")) {
-          setError("This email is already registered. Please sign in instead.");
+      if (isResetPassword) {
+        const { error: resetError } = await resetPassword(email);
+        if (resetError) {
+          setError(resetError.message);
         } else {
-          setError(authError.message);
+          setResetSuccess(true);
+          setError("");
         }
       } else {
-        const successEvent = isSignUp ? Events.SIGNUP_SUCCESS : Events.LOGIN_SUCCESS;
-        trackEvent(successEvent, {
-          email_domain: email.split('@')[1]
-        });
-        
-        if (onSuccess) {
-          onSuccess();
+        if (!isResetPassword && password.length < 6) {
+          setError("Password must be at least 6 characters");
+          setLoading(false);
+          return;
         }
-        onClose();
+
+        const eventType = isSignUp ? Events.SIGNUP_ATTEMPTED : Events.LOGIN_ATTEMPTED;
+        trackEvent(eventType, {
+          email_domain: email.split('@')[1],
+          is_business_email: isBusinessEmail(email)
+        });
+
+        const { error: authError } = isSignUp 
+          ? await signUp(email, password)
+          : await signIn(email, password);
+
+        if (authError) {
+          const errorEvent = isSignUp ? Events.SIGNUP_FAILED : Events.LOGIN_FAILED;
+          trackEvent(errorEvent, {
+            error_message: authError.message,
+            email_domain: email.split('@')[1]
+          });
+          
+          if (authError.message.includes("Invalid login credentials")) {
+            setError("Invalid email or password");
+          } else if (authError.message.includes("User already registered")) {
+            setError("This email is already registered. Please sign in instead.");
+          } else {
+            setError(authError.message);
+          }
+        } else {
+          const successEvent = isSignUp ? Events.SIGNUP_SUCCESS : Events.LOGIN_SUCCESS;
+          trackEvent(successEvent, {
+            email_domain: email.split('@')[1]
+          });
+          
+          if (onSuccess) {
+            onSuccess();
+          }
+          onClose();
+        }
       }
     } catch (err) {
       trackEvent(Events.LOGIN_FAILED, { error: 'unexpected_error' });
@@ -134,14 +148,23 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
         </Button>
 
         <h2 className="text-2xl font-bold mb-2 text-foreground">
-          {isSignUp ? "Create Account" : "Sign In"}
+          {isResetPassword ? "Reset Password" : isSignUp ? "Create Account" : "Sign In"}
         </h2>
-        <p className="text-muted-foreground mb-2">
-          Please use your <strong>business email</strong> to access receipt processing.
-        </p>
-        <p className="text-sm text-muted-foreground mb-6">
-          Personal email addresses (Gmail, Yahoo, etc.) are not accepted.
-        </p>
+        {!isResetPassword && (
+          <>
+            <p className="text-muted-foreground mb-2">
+              Please use your <strong>business email</strong> to access receipt processing.
+            </p>
+            <p className="text-sm text-muted-foreground mb-6">
+              Personal email addresses (Gmail, Yahoo, etc.) are not accepted.
+            </p>
+          </>
+        )}
+        {isResetPassword && (
+          <p className="text-muted-foreground mb-6">
+            Enter your business email to receive a password reset link.
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -166,25 +189,36 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10"
-                required
-                minLength={6}
-              />
+          {!isResetPassword && (
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Minimum 6 characters
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Minimum 6 characters
-            </p>
-          </div>
+          )}
+
+          {resetSuccess && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Password reset link sent! Check your email inbox.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {error && (
             <Alert variant="destructive">
@@ -196,26 +230,65 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
           <Button
             type="submit"
             className="w-full"
-            disabled={loading || !!emailError || !email || !password}
+            disabled={loading || !!emailError || !email || (!isResetPassword && !password)}
           >
-            {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
+            {loading 
+              ? "Processing..." 
+              : isResetPassword 
+                ? "Send Reset Link" 
+                : isSignUp 
+                  ? "Create Account" 
+                  : "Sign In"}
           </Button>
         </form>
 
-        <div className="mt-4 text-center text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError("");
-              setEmailError("");
-            }}
-            className="text-primary hover:underline"
-          >
-            {isSignUp 
-              ? "Already have an account? Sign in" 
-              : "Don't have an account? Sign up"}
-          </button>
+        <div className="mt-4 space-y-2 text-center text-sm">
+          {!isResetPassword && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError("");
+                  setEmailError("");
+                  setResetSuccess(false);
+                }}
+                className="text-primary hover:underline block w-full"
+              >
+                {isSignUp 
+                  ? "Already have an account? Sign in" 
+                  : "Don't have an account? Sign up"}
+              </button>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetPassword(true);
+                    setError("");
+                    setEmailError("");
+                    setResetSuccess(false);
+                  }}
+                  className="text-muted-foreground hover:text-primary hover:underline block w-full"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </>
+          )}
+          {isResetPassword && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsResetPassword(false);
+                setError("");
+                setEmailError("");
+                setResetSuccess(false);
+              }}
+              className="text-primary hover:underline block w-full"
+            >
+              Back to sign in
+            </button>
+          )}
         </div>
       </div>
     </div>
