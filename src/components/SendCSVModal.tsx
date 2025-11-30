@@ -49,11 +49,21 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
     
     if (!trimmedEmail) {
       setError('Email is required');
+      trackEvent(Events.SEND_CSV_ATTEMPTED, {
+        email: '',
+        receipt_count: extractedRows.length,
+        validation_error: 'email_required'
+      });
       return;
     }
 
     if (!isBusinessEmail(trimmedEmail)) {
       setError('Use a business email.');
+      trackEvent(Events.SEND_CSV_ATTEMPTED, {
+        email: trimmedEmail,
+        receipt_count: extractedRows.length,
+        validation_error: 'business_email_required'
+      });
       return;
     }
 
@@ -62,6 +72,7 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
 
     trackEvent(Events.SEND_CSV_ATTEMPTED, {
       email: trimmedEmail,
+      email_domain: trimmedEmail.split('@')[1],
       receipt_count: extractedRows.length
     });
 
