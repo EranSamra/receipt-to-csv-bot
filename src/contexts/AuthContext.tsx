@@ -46,6 +46,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: session.user.email,
             email_domain: session.user.email?.split('@')[1]
           });
+          
+          // Send notification email to admin about new signup
+          const notifyAdmin = async () => {
+            try {
+              const API_URL = import.meta.env.DEV 
+                ? 'http://localhost:3001/api/notify-signup'
+                : '/api/notify-signup';
+              
+              await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userEmail: session.user.email,
+                  userId: session.user.id
+                })
+              });
+              console.log('[AuthContext] Signup notification sent to admin');
+            } catch (error) {
+              console.error('[AuthContext] Failed to send signup notification:', error);
+              // Don't throw - notification failure shouldn't break signup flow
+            }
+          };
+          
+          notifyAdmin();
         }
         
         setSession(session);

@@ -83,21 +83,36 @@ const Index = () => {
           variant: "destructive",
         });
         signOut();
-        if (pendingFiles) {
+        // Keep pendingFiles so user can try again with correct email
+        if (pendingFiles && pendingFiles.length > 0) {
           setShowLoginModal(true);
         }
       } else if (pendingFiles && pendingFiles.length > 0) {
-        // User successfully logged in with business email, continue with extraction
-        console.log('[Index] User authenticated, continuing with extraction');
+        // User successfully logged in with business email, restore files and continue with extraction
+        console.log('[Index] User authenticated, restoring files and continuing with extraction');
+        console.log(`[Index] Restoring ${pendingFiles.length} file(s) from pendingFiles`);
+        
+        // Restore files to selectedFiles so they're visible in the UI
         const filesToProcess = [...pendingFiles];
         setSelectedFiles(filesToProcess);
+        
+        // Clear pendingFiles after restoring
         setPendingFiles(null);
+        
+        // Close login modal if open
+        setShowLoginModal(false);
+        
+        // Start extraction automatically
         setIsProcessing(true);
         setShowMeshScanner(true);
         setShowParticleEffect(false);
+      } else if (!pendingFiles && selectedFiles.length === 0) {
+        // User just logged in but no pending files - files might have been cleared
+        // Check if we should restore from localStorage (if we implement that)
+        console.log('[Index] User authenticated but no pending files found');
       }
     }
-  }, [user, isBusinessEmail, signOut, toast, pendingFiles]);
+  }, [user, isBusinessEmail, signOut, toast, pendingFiles, selectedFiles.length]);
   
   // Ensure selectedFiles persist after scanning completes
   // This is critical for blob URL validity
@@ -571,8 +586,14 @@ const Index = () => {
     // Check authentication only when user uploads their own files (not examples)
     if (!user) {
       // Save files for later processing after login
-      setPendingFiles([...selectedFiles]);
-      trackEvent(Events.LOGIN_MODAL_OPENED, { trigger: 'extraction_required' });
+      // Make a copy to ensure files persist even if selectedFiles changes
+      const filesToSave = [...selectedFiles];
+      console.log(`[Index] Saving ${filesToSave.length} file(s) to pendingFiles for authentication`);
+      setPendingFiles(filesToSave);
+      trackEvent(Events.LOGIN_MODAL_OPENED, { 
+        trigger: 'extraction_required',
+        file_count: filesToSave.length 
+      });
       setShowLoginModal(true);
       return;
     }
@@ -603,7 +624,8 @@ const Index = () => {
   };
 
   const proceedWithExtraction = () => {
-    const filesToProcess = pendingFiles || selectedFiles;
+    // Use pendingFiles if available (from auth flow), otherwise use selectedFiles
+    const filesToProcess = pendingFiles && pendingFiles.length > 0 ? pendingFiles : selectedFiles;
     
     if (filesToProcess.length === 0) {
       toast({
@@ -614,8 +636,9 @@ const Index = () => {
       return;
     }
 
-    // If we have pending files, update selectedFiles
-    if (pendingFiles) {
+    // If we have pending files, update selectedFiles to make them visible in UI
+    if (pendingFiles && pendingFiles.length > 0) {
+      console.log(`[Index] proceedWithExtraction: Restoring ${pendingFiles.length} file(s) from pendingFiles`);
       setSelectedFiles([...pendingFiles]);
       setPendingFiles(null);
     }
@@ -1275,16 +1298,15 @@ const Index = () => {
         isOpen={showLoginModal}
         onClose={() => {
           setShowLoginModal(false);
-          // If user closes modal without logging in, clear pending files
-          if (pendingFiles && !user) {
-            setPendingFiles(null);
-            setSelectedFiles([]);
-          }
+          // Don't clear pending files when modal closes - keep them for retry
+          // Only clear if user explicitly wants to cancel (we'll add a cancel button if needed)
+          // Files will be preserved and restored after successful authentication
+          console.log('[Index] Login modal closed, preserving pending files for retry');
         }}
         onSuccess={() => {
           // User successfully logged in, can now proceed with upload
-          // The useEffect will handle continuing with extraction
-          console.log('[Index] User logged in successfully, will continue with extraction');
+          // The useEffect will handle continuing with extraction and restoring files
+          console.log('[Index] User logged in successfully, useEffect will restore files and continue extraction');
         }}
       />
     </div>

@@ -799,6 +799,66 @@ app.post('/api/send-csv', async (req, res) => {
   }
 });
 
+// Signup notification endpoint
+app.post('/api/notify-signup', async (req, res) => {
+  try {
+    const { userEmail, userId } = req.body;
+
+    if (!userEmail) {
+      return res.status(400).json({ error: 'User email is required' });
+    }
+
+    // Check API key configuration and initialize Resend
+    let resendInstance;
+    try {
+      resendInstance = getResend();
+    } catch (e) {
+      console.error('[notify-signup] Email service API key not configured');
+      return res.status(500).json({ error: 'Email service not configured. Please set RESEND_API_KEY.' });
+    }
+
+    const adminEmail = 'eran.samra@meshpayments.com';
+    const emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+
+    console.log('[notify-signup] Sending signup notification...');
+    console.log('[notify-signup] New user:', userEmail);
+    console.log('[notify-signup] Notifying:', adminEmail);
+
+    // Send notification email to admin
+    const { data, error } = await resendInstance.emails.send({
+      from: emailFrom,
+      to: adminEmail,
+      subject: 'New User Signup - Receipt to CSV Bot',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">New User Signup Notification</h2>
+          <p>A new user has signed up for the Receipt to CSV Bot:</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Email:</strong> ${userEmail}</p>
+            ${userId ? `<p style="margin: 5px 0;"><strong>User ID:</strong> ${userId}</p>` : ''}
+            <p style="margin: 5px 0;"><strong>Signup Time:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          <p style="color: #666; font-size: 14px;">This is an automated notification from the Receipt to CSV Bot.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('[notify-signup] Resend error:', error);
+      throw new Error(error.message || 'Failed to send notification email');
+    }
+
+    console.log('[notify-signup] Notification email sent successfully:', data?.id);
+    return res.status(200).json({ ok: true, messageId: data?.id });
+  } catch (e) {
+    console.error('[notify-signup] Error sending notification email:', e);
+    return res.status(500).json({ 
+      error: e.message || 'Failed to send notification email',
+      details: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Receipt Scanner Server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
