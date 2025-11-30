@@ -780,19 +780,22 @@ app.post('/api/send-csv', async (req, res) => {
       bcc: adminEmail, // BCC admin on all CSV emails
       subject: 'Your CSV from Mesh AI is ready',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <div style="font-family: Arial, Helvetica, sans-serif; font-size:14px; line-height:1.5; color:#222222; max-width:560px;">
           <p>Hi,</p>
-          
+
           <p>Your CSV from Mesh AI is attached.</p>
-          
-          <p>Mesh AI is part of <a href="https://www.meshpayments.com" style="color: #0066cc; text-decoration: none;">Mesh Payments</a>, a spend and travel platform that turns receipts into clean, compliant data and flags anomalies in real time.</p>
-          
-          <p><a href="https://www.meshpayments.com" style="color: #0066cc; text-decoration: none;">Learn more</a>.</p>
-          
-          <p style="margin-top: 30px;">
+
+          <p>
+            Mesh AI is part of 
+            <a href="https://www.meshpayments.com/?utm_source=mesh-ai-tool&utm_medium=email&utm_campaign=receipt-to-csv&utm_content=email-body" 
+               style="color:#1a73e8; text-decoration:underline;">
+              Mesh Payments
+            </a>, a spend and travel platform that turns receipts into clean, compliant data and flags anomalies in real time.
+          </p>
+
+          <p>
             Eran Samara<br>
-            Product & AI, Mesh Payments<br>
-            <a href="https://www.meshpayments.com" style="color: #0066cc; text-decoration: none;">https://www.meshpayments.com</a>
+            Product &amp; AI, Mesh Payments
           </p>
         </div>
       `,
