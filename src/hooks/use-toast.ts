@@ -77,6 +77,13 @@ export const reducer = (state: State, action: Action): State => {
       };
 
     case "UPDATE_TOAST":
+      // Check if toast exists before updating
+      const toastExists = state.toasts.some((t) => t.id === action.toast.id);
+      if (!toastExists) {
+        // Toast doesn't exist, return state unchanged (silently ignore)
+        console.warn(`[Toast] Attempted to update non-existent toast with id: ${action.toast.id}`);
+        return state;
+      }
       return {
         ...state,
         toasts: state.toasts.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t)),
@@ -137,11 +144,18 @@ type Toast = Omit<ToasterToast, "id">;
 function toast({ ...props }: Toast) {
   const id = genId();
 
-  const update = (props: ToasterToast) =>
+  const update = (props: ToasterToast) => {
+    // Check if toast still exists before updating
+    const toastExists = memoryState.toasts.some((t) => t.id === id);
+    if (!toastExists) {
+      console.warn(`[Toast] Attempted to update non-existent toast with id: ${id}`);
+      return;
+    }
     dispatch({
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     });
+  };
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
 
   dispatch({

@@ -32,6 +32,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user_id: session?.user?.id
         });
         
+        // Track specific sign in/sign up events
+        const eventString = String(event);
+        if (eventString === 'SIGNED_IN' && session?.user) {
+          trackEvent(Events.USER_SIGNED_IN, {
+            user_id: session.user.id,
+            email: session.user.email,
+            email_domain: session.user.email?.split('@')[1]
+          });
+        } else if (eventString === 'SIGNED_UP' && session?.user) {
+          trackEvent(Events.USER_SIGNED_UP, {
+            user_id: session.user.id,
+            email: session.user.email,
+            email_domain: session.user.email?.split('@')[1]
+          });
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
       }

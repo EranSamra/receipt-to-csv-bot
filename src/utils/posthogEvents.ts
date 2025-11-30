@@ -49,10 +49,13 @@ export const Events = {
   SIGNUP_ATTEMPTED: 'signup_attempted',
   SIGNUP_SUCCESS: 'signup_success',
   SIGNUP_FAILED: 'signup_failed',
+  USER_SIGNED_IN: 'user_signed_in',
+  USER_SIGNED_UP: 'user_signed_up',
   LOGOUT: 'logout',
   AUTH_STATE_CHANGED: 'auth_state_changed',
   
   // Send CSV Events
+  SEND_CSV_BUTTON_CLICKED: 'send_csv_button_clicked',
   SEND_CSV_MODAL_OPENED: 'send_csv_modal_opened',
   SEND_CSV_ATTEMPTED: 'send_csv_attempted',
   SEND_CSV_SUCCESS: 'send_csv_success',

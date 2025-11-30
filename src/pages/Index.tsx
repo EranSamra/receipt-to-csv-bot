@@ -540,13 +540,17 @@ const Index = () => {
 
   const handleScanError = (error: Error) => {
     console.error('Scan error:', error);
+    const errorMessage = error.message || "Failed to process receipts";
     trackEvent(Events.EXTRACTION_FAILED, {
-      error: error.message || 'unknown_error',
-      file_count: selectedFiles.length
+      error: errorMessage,
+      error_type: error.constructor.name,
+      file_count: selectedFiles.length,
+      user_facing_error: true,
+      context: 'scan_error'
     });
     toast({
       title: "Processing failed",
-      description: error.message || "Failed to process receipts",
+      description: errorMessage,
       variant: "destructive",
     });
     setIsProcessing(false);
@@ -933,6 +937,15 @@ const Index = () => {
         errorMessage = "An unexpected error occurred. Please check your internet connection and try again.";
       }
       
+      // Track extraction error with user-facing message
+      trackEvent(Events.EXTRACTION_FAILED, {
+        error_title: errorTitle,
+        error_message: errorMessage,
+        error_type: error?.constructor?.name || typeof error,
+        file_count: selectedFiles.length,
+        user_facing_error: true
+      });
+      
       toast({
         title: errorTitle,
         description: errorMessage,
@@ -1178,7 +1191,12 @@ const Index = () => {
                     </p>
                     <div className="flex justify-center">
                       <Button
-                        onClick={() => setShowSendCSVModal(true)}
+                        onClick={() => {
+                          trackEvent(Events.SEND_CSV_BUTTON_CLICKED, {
+                            receipt_count: results.length
+                          });
+                          setShowSendCSVModal(true);
+                        }}
                         className="bg-gradient-to-r from-turquoise-500 to-turquoise-600 hover:from-turquoise-600 hover:to-turquoise-700 text-white text-lg px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
                       >
                         <CheckCircle className="h-6 w-6 mr-3" />
@@ -1214,7 +1232,7 @@ const Index = () => {
               <span className="ml-4">Built with</span> <span className="text-red-500">❤️</span>
             </p>
             <p className="text-gray-400 text-sm md:text-base">
-              Using Mesh AI Extraction Engine
+              Using Meshpayments.com AI Extraction Engine
             </p>
             <p className="text-gray-500 text-[10px] mt-4">
               Demo Use Only: Not for production. Receipt images are immediately discarded after processing. Provided 'as-is' without warranty. Please do not use real financial data
