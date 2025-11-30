@@ -305,7 +305,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                   <div className={`text-lg font-bold ${hasAnyFlag ? 'text-red-700' : 'text-turquoise-600'}`}>
                     {row["Amount"]} {row["Currency"]}
                   </div>
-                  <div className={`text-sm ${hasAnyFlag ? 'text-red-600' : 'text-gray-600'} mt-1`}>
+                  <div className={`text-sm ${hasAnyFlag ? 'text-red-600' : 'text-gray-600'} mt-1 whitespace-nowrap`}>
                     {row["Date"] || 'N/A'}
                   </div>
                   <div className="text-xs text-gray-500 mt-1 truncate">
@@ -479,7 +479,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                         <TableCell className={`font-medium ${textColor} text-base md:text-lg`}>
                           {row["Invoice Number"] || '-'}
                         </TableCell>
-                        <TableCell className={`${textColorSecondary} text-base md:text-lg`}>
+                        <TableCell className={`${textColorSecondary} text-base md:text-lg whitespace-nowrap`}>
                           {row["Date"] || 'N/A'}
                         </TableCell>
                         <TableCell className={`font-semibold ${textColor} text-base md:text-lg`}>
@@ -565,7 +565,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                               {lineItem.description}
                             </div>
                           </TableCell>
-                          <TableCell className={`text-base md:text-lg ${textColorSecondary}`}>
+                          <TableCell className={`text-base md:text-lg ${textColorSecondary} whitespace-nowrap`}>
                             {lineItem.date || row["Date"] || 'N/A'}
                           </TableCell>
                           <TableCell className={`text-base md:text-lg font-medium ${textColor}`}>
