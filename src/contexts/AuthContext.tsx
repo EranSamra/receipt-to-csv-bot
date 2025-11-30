@@ -10,6 +10,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: any }>;
   isBusinessEmail: (email: string) => boolean;
 }
 
@@ -74,13 +75,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectUrl
       }
     });
+
+    // Send notification email for new signups
+    if (!error && data.user) {
+      try {
+        await supabase.functions.invoke('send-signup-notification', {
+          body: {
+            email: data.user.email,
+            userId: data.user.id
+          }
+        });
+      } catch (notificationError) {
+        console.error('Failed to send signup notification:', notificationError);
+        // Don't fail signup if notification fails
+      }
+    }
+    
     return { error };
   };
 
@@ -89,6 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+  };
+
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/`,
+    });
+    return { error };
   };
 
   const isBusinessEmail = (email: string): boolean => {
@@ -102,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, isBusinessEmail }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, resetPassword, isBusinessEmail }}>
       {children}
     </AuthContext.Provider>
   );
