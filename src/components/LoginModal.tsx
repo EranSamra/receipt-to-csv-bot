@@ -16,7 +16,7 @@ interface LoginModalProps {
 export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(true);
   const [error, setError] = useState("");
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -134,24 +134,24 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl relative border border-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-background rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative border border-border max-h-[90vh] overflow-y-auto">
         <Button
           variant="ghost"
           size="sm"
           onClick={onClose}
-          className="absolute top-4 right-4"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 rounded-full p-2"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5 sm:h-4 sm:w-4" />
         </Button>
 
-        <h2 className="text-2xl font-bold mb-2 text-foreground">
+        <h2 className="text-xl sm:text-2xl font-bold mb-2 text-foreground pr-8">
           {isSignUp ? "Create Account" : "Sign In"}
         </h2>
-        <p className="text-muted-foreground mb-2">
+        <p className="text-sm sm:text-base text-muted-foreground mb-2">
           Please use your <strong>business email</strong> to access receipt processing.
         </p>
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-xs sm:text-sm text-muted-foreground mb-6">
           Personal email addresses (Gmail, Yahoo, etc.) are not accepted.
         </p>
 
@@ -207,14 +207,14 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full h-12 sm:h-10 text-base sm:text-sm touch-manipulation"
             disabled={loading || !!emailError || !email || !password}
           >
             {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
           </Button>
         </form>
 
-        <div className="mt-4 text-center text-sm">
+        <div className="mt-4 text-center">
           <button
             type="button"
             onClick={() => {
@@ -222,7 +222,7 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
               setError("");
               setEmailError("");
             }}
-            className="text-primary hover:underline"
+            className="text-sm sm:text-base text-primary hover:underline py-2 touch-manipulation"
           >
             {isSignUp 
               ? "Already have an account? Sign in" 
