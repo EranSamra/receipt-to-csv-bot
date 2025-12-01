@@ -80,14 +80,23 @@ export default async function handler(req, res) {
     }
 
     console.log('[send-csv] Sending email via Resend...');
-    console.log('[send-csv] From:', process.env.EMAIL_FROM || 'onboarding@resend.dev');
-    console.log('[send-csv] To:', email);
-
+    
     // Convert CSV to Buffer for attachment (Resend accepts Buffer or base64 string)
     const csvBuffer = Buffer.from(csv, 'utf-8');
 
     // Send email with attachment using Resend
-    const emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    // Extract just the email address if EMAIL_FROM includes display name
+    let emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    // Handle format like "Mesh AI <noreply@domain.com>" - extract just the email
+    const emailMatch = emailFrom.match(/<([^>]+)>/) || emailFrom.match(/([^\s<]+@[^\s>]+)/);
+    if (emailMatch) {
+      emailFrom = emailMatch[1];
+    }
+    
+    console.log('[send-csv] From:', emailFrom);
+    console.log('[send-csv] To:', email);
+    console.log('[send-csv] API Key present:', !!process.env.RESEND_API_KEY);
+    console.log('[send-csv] From domain:', emailFrom.match(/@([^\s>]+)/)?.[1] || 'unknown');
     const adminEmail = 'eran.samra@meshpayments.com';
     
     console.log('[send-csv] Sending email with BCC to admin:', adminEmail);
@@ -126,8 +135,37 @@ export default async function handler(req, res) {
     });
 
     if (error) {
-      console.error('[send-csv] Resend error:', error);
-      throw new Error(error.message || 'Failed to send email');
+      console.error('[send-csv] Resend error:', JSON.stringify(error, null, 2));
+      console.error('[send-csv] Resend error type:', typeof error);
+      console.error('[send-csv] Resend error keys:', Object.keys(error || {}));
+      
+      // Handle Resend error structure
+      let errorMessage = 'Failed to send email';
+      
+      // Resend errors can be objects with message, name, or statusCode
+      if (typeof error === 'object' && error !== null) {
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (error.name) {
+          errorMessage = error.name;
+        } else if (error.statusCode) {
+          errorMessage = `Email service error (${error.statusCode})`;
+        }
+        
+        // Check for domain verification errors
+        const errorStr = JSON.stringify(error).toLowerCase();
+        if (errorStr.includes('domain') || errorStr.includes('verify') || errorStr.includes('not verified')) {
+          errorMessage = 'Domain not verified. Please verify your domain in Resend and update EMAIL_FROM environment variable.';
+        } else if (errorStr.includes('unauthorized') || errorStr.includes('api key')) {
+          errorMessage = 'Email service authentication failed. Please check your API key.';
+        } else if (errorStr.includes('rate limit') || errorStr.includes('quota')) {
+          errorMessage = 'Email service rate limit reached. Please try again later.';
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     console.log('[send-csv] Email sent successfully:', data?.id);
@@ -137,15 +175,19 @@ export default async function handler(req, res) {
     console.error('[send-csv] Error message:', e?.message);
     console.error('[send-csv] Error stack:', e?.stack);
     console.error('[send-csv] Error code:', e?.code);
+    console.error('[send-csv] Full error object:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
     
     // Provide more specific error messages
     let errorMessage = 'Send failed';
+    
     if (e?.message) {
       errorMessage = e.message;
     } else if (e?.code === 'EAUTH') {
       errorMessage = 'Email authentication failed. Please check API key.';
     } else if (e?.code === 'ECONNECTION') {
       errorMessage = 'Could not connect to email service.';
+    } else if (typeof e === 'string') {
+      errorMessage = e;
     }
     
     return res.status(500).json({ error: errorMessage });

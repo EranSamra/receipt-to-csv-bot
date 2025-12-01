@@ -153,13 +153,19 @@
   background: #fff;
   border: 1px solid #eee;
   border-radius: 14px;
-  max-width: 440px;
   width: 92%;
-  max-width: calc(100vw - 2rem);
-  padding: 20px 18px;
+  max-width: 440px;
+  padding: 18px 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-card {
+    max-width: calc(100vw - 2rem);
+    padding: 20px 18px;
+  }
 }
 
 .modal-title {
