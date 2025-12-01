@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Receipt, Sparkles, Zap, Shield, Brain, ArrowRight, CheckCircle } from "lucide-react";
+import { Receipt, Sparkles, Zap, Shield, Brain, ArrowRight, CheckCircle, Database, Globe, FileText, TrendingUp } from "lucide-react";
 import { ReceiptUpload } from "@/components/ReceiptUpload";
 import { ExamplesUpload } from "@/components/ExamplesUpload";
 import { ExamplesModal } from "@/components/ExamplesModal";
@@ -14,7 +14,6 @@ import InvoiceScanModal from "@/components/InvoiceScanModal";
 import MeshReceiptScanner from "@/components/MeshReceiptScanner";
 import { SendCSVModal } from "@/components/SendCSVModal";
 import { compressImageIfNeeded } from "@/utils/imageCompression";
-import { MeshHeroCTA } from "@/components/MeshHeroCTA";
 import { convertPDFToImage } from "@/utils/pdfConverter";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/LoginModal";
@@ -38,6 +37,10 @@ const Index = () => {
   const [showSendCSVModal, setShowSendCSVModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const [ctaEmail, setCtaEmail] = useState('');
+  const [ctaCompany, setCtaCompany] = useState('');
+  const [ctaMessage, setCtaMessage] = useState('');
+  const [isCtaSubmitting, setIsCtaSubmitting] = useState(false);
   const { toast } = useToast();
   const { user, loading: authLoading, isBusinessEmail, signOut } = useAuth();
 
@@ -1088,15 +1091,12 @@ const Index = () => {
             </div>
               
               <h1 className={`mesh-heading-xl mb-4 ${animateHero ? 'mesh-fade-in' : 'opacity-0'}`}>
-                Receipt Data Extractor
+                AI-Powered Receipt Scanning & Data Extraction
               </h1>
               
               <div className={`mesh-text-lg max-w-3xl mx-auto mb-6 ${animateHero ? 'mesh-slide-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
                 <p className="mb-4 leading-relaxed">
-                  Upload your receipts and instantly convert them into structured expense data powered by AI.
-                </p>
-                <p className="leading-relaxed">
-                  <span className="text-turquoise-400 font-semibold">Accurate. Secure. Built for Finance Teams.</span>
+                  Convert receipts into expense-report ready data in seconds. AI-powered extraction eliminates manual work, ensures compliance, flags anomalies in real-time, and delivers accurate, structured data for your finance team.
                 </p>
               </div>
 
@@ -1118,7 +1118,7 @@ const Index = () => {
       </header>
 
             {/* Main Upload Cards */}
-            <div className={`max-w-6xl mx-auto ${animateHero ? 'mesh-scale-in' : 'opacity-0'}`} style={{ animationDelay: '0.6s' }}>
+            <div className={`max-w-6xl mx-auto ${animateHero ? 'mesh-scale-in' : ''}`} style={{ animationDelay: '0.2s' }}>
               {selectedFiles.length === 0 ? (
                 // Two cards side by side when no files selected
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-4 lg:gap-6 items-stretch">
@@ -1187,6 +1187,94 @@ const Index = () => {
                 </div>
               )}
             </div>
+
+            {/* Demo Disclaimer */}
+            <div className="max-w-6xl mx-auto mt-6 px-4">
+              <p className="text-center text-gray-500 text-xs leading-relaxed max-w-2xl mx-auto font-normal">
+                Demo Use Only: Not for production. Receipt images are immediately discarded after processing. Provided 'as-is' without warranty. Please do not use real financial data.
+              </p>
+            </div>
+
+            {/* Enterprise-Grade Receipt Capture Section */}
+            <div className="max-w-6xl mx-auto mt-16 md:mt-20 px-4">
+              <div className="text-center mb-10">
+                <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                  Enterprise-Grade Receipt Capture
+                </h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Feature 1 */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#A0E8D5]/30 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#A0E8D5]/20 to-[#A0E8D5]/10 rounded-lg flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-[#A0E8D5]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm leading-relaxed">
+                        AI-driven extraction for line items, totals, taxes, currencies, vendors, and payment methods
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 2 */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#A0E8D5]/30 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#A0E8D5]/20 to-[#A0E8D5]/10 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="h-6 w-6 text-[#A0E8D5]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm leading-relaxed">
+                        Automatic categorization aligned with your policies and accounting codes
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 3 */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#A0E8D5]/30 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#A0E8D5]/20 to-[#A0E8D5]/10 rounded-lg flex items-center justify-center">
+                      <Database className="h-6 w-6 text-[#A0E8D5]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm leading-relaxed">
+                        Direct ERP sync with systems like NetSuite, SAP, Oracle, and more
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 4 */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#A0E8D5]/30 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#A0E8D5]/20 to-[#A0E8D5]/10 rounded-lg flex items-center justify-center">
+                      <Globe className="h-6 w-6 text-[#A0E8D5]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm leading-relaxed">
+                        Multi-language support for global operations
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature 5 */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10 hover:border-[#A0E8D5]/30 transition-all duration-300 md:col-span-2 lg:col-span-1">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-[#A0E8D5]/20 to-[#A0E8D5]/10 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-[#A0E8D5]" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white text-sm leading-relaxed">
+                        Zero manual data entry with industry-leading accuracy
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -1240,29 +1328,164 @@ const Index = () => {
             </div>
           </section>
 
-          {/* Mesh Hero CTA Section */}
-          <div className="container mx-auto px-4">
-            <MeshHeroCTA />
-          </div>
         </>
       )}
 
-      {/* Footer */}
-      <footer className="py-12 bg-gray-900">
-        <div className="container mx-auto px-4 text-center">
-          <div className="space-y-2">
-            <p className="text-white text-xl md:text-2xl font-bold">
-              <span className="ml-4">Built with</span> <span className="text-red-500">❤️</span>
-            </p>
-            <p className="text-gray-400 text-sm md:text-base">
-              Using Meshpayments.com AI Extraction Engine
-            </p>
-            <p className="text-gray-500 text-[10px] mt-4">
-              Demo Use Only: Not for production. Receipt images are immediately discarded after processing. Provided 'as-is' without warranty. Please do not use real financial data
-            </p>
+      {/* CTA Footer Section - Mesh Payments Style */}
+      <div className="relative w-full bg-gradient-to-b from-[#0B2530] via-[#0B2530] to-[#051116]">
+        {/* Smooth gradient transition overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0B2530]/30 to-[#051116] pointer-events-none"></div>
+        
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-16 md:py-24">
+          {/* Modern CTA Card - Enterprise Mesh Style */}
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-gradient-to-br from-[#0B2530] to-[#0a1f28] rounded-3xl p-8 md:p-12 lg:p-16 shadow-2xl border border-[#A0E8D5]/10 backdrop-blur-sm">
+              {/* Header Section */}
+              <div className="text-center mb-6 md:mb-8">
+                <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight tracking-tight">
+                  Lead the future of intelligent finance
+                </h2>
+                <p className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
+                  Get early access to Mesh AI and see how Mia and Mac transform everyday finance work into intelligent, automated insights powered by best-in-class AI.
+                </p>
+              </div>
+
+              {/* Modern Form - Clean & Professional */}
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setCtaMessage('');
+
+                  if (!ctaEmail || !isBusinessEmail(ctaEmail)) {
+                    setCtaMessage('Please use a business email address.');
+                    return;
+                  }
+
+                  if (!ctaCompany || ctaCompany.trim().length < 2) {
+                    setCtaMessage('Please enter your company name.');
+                    return;
+                  }
+
+                  setIsCtaSubmitting(true);
+
+                  trackEvent(Events.LEAD_FORM_SUBMITTED, {
+                    email_domain: ctaEmail.split('@')[1],
+                    has_company: !!ctaCompany,
+                    source: 'footer_cta'
+                  });
+
+                  try {
+                    const portalId = "9157499";
+                    const formId = "4ca21b58-81a3-48d5-a839-16d837f8178e";
+                    const endpoint = `https://api.hsforms.com/submissions/v3/integration/submit/${portalId}/${formId}`;
+
+                    const payload = {
+                      fields: [
+                        { name: "email", value: ctaEmail },
+                        { name: "company", value: ctaCompany }
+                      ],
+                      context: { pageUri: window.location.href, pageName: document.title }
+                    };
+
+                    const res = await fetch(endpoint, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload)
+                    });
+
+                    if (!res.ok) throw new Error("HubSpot submission failed");
+
+                    trackEvent(Events.LEAD_FORM_SUCCESS, {
+                      email_domain: ctaEmail.split('@')[1],
+                      source: 'footer_cta'
+                    });
+
+                    setCtaMessage("✅ Thanks! We'll reach out shortly.");
+                    setCtaEmail("");
+                    setCtaCompany("");
+                  } catch (err) {
+                    trackEvent(Events.LEAD_FORM_FAILED, {
+                      error: err instanceof Error ? err.message : 'unknown_error',
+                      source: 'footer_cta'
+                    });
+                    setCtaMessage("❌ Something went wrong. Please try again.");
+                  } finally {
+                    setIsCtaSubmitting(false);
+                  }
+                }}
+                className="space-y-4"
+              >
+                {/* Two Field Layout - Side by Side on Desktop */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Work Email Field */}
+                  <div className="relative group">
+                    <input 
+                      type="email" 
+                      placeholder="Work email" 
+                      value={ctaEmail}
+                      onChange={(e) => setCtaEmail(e.target.value)}
+                      className="w-full bg-white/95 backdrop-blur-sm px-5 py-4 rounded-xl text-gray-900 placeholder:text-gray-500 border-2 border-transparent focus:border-[#A0E8D5] focus:outline-none focus:ring-4 focus:ring-[#A0E8D5]/20 transition-all duration-300 font-medium text-base shadow-lg hover:shadow-xl hover:bg-white" 
+                      required
+                      disabled={isCtaSubmitting}
+                    />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#A0E8D5]/0 to-[#A0E8D5]/0 group-hover:from-[#A0E8D5]/5 group-hover:to-transparent pointer-events-none transition-all duration-300"></div>
+                  </div>
+
+                  {/* Company Name Field */}
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      placeholder="Company name" 
+                      value={ctaCompany}
+                      onChange={(e) => setCtaCompany(e.target.value)}
+                      className="w-full bg-white/95 backdrop-blur-sm px-5 py-4 rounded-xl text-gray-900 placeholder:text-gray-500 border-2 border-transparent focus:border-[#A0E8D5] focus:outline-none focus:ring-4 focus:ring-[#A0E8D5]/20 transition-all duration-300 font-medium text-base shadow-lg hover:shadow-xl hover:bg-white" 
+                      required
+                      disabled={isCtaSubmitting}
+                    />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#A0E8D5]/0 to-[#A0E8D5]/0 group-hover:from-[#A0E8D5]/5 group-hover:to-transparent pointer-events-none transition-all duration-300"></div>
+                  </div>
+                </div>
+
+                {/* Submit Button - Mesh Brand Style */}
+                <button 
+                  type="submit"
+                  disabled={isCtaSubmitting}
+                  className="w-full bg-gradient-to-r from-[#A0E8D5] to-[#7DD3C1] text-[#0B2530] px-8 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-[#A0E8D5]/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 group"
+                >
+                  {isCtaSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-[#0B2530] border-t-transparent"></div>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Get Early Access</span>
+                      <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Success/Error Message */}
+              {ctaMessage && (
+                <div className={`mt-6 text-center text-sm font-medium px-4 py-3 rounded-lg transition-all duration-300 ${
+                  ctaMessage.includes('✅') 
+                    ? 'bg-[#A0E8D5]/20 text-[#A0E8D5] border border-[#A0E8D5]/30' 
+                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                }`}>
+                  {ctaMessage}
+                </div>
+              )}
+
+              {/* Trust Indicator */}
+              <div className="mt-8 flex items-center justify-center gap-2 text-gray-400 text-xs">
+                <Shield className="h-4 w-4" />
+                <span>We respect your privacy. No spam, unsubscribe anytime.</span>
+              </div>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
 
       {/* Examples Modal */}
       <ExamplesModal
