@@ -86,14 +86,14 @@ export default async function handler(req, res) {
 
     // Send email with attachment using Resend
     // Extract just the email address if EMAIL_FROM includes display name
-    let emailFrom = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-    // Handle format like "Mesh AI <noreply@domain.com>" - extract just the email
-    const emailMatch = emailFrom.match(/<([^>]+)>/) || emailFrom.match(/([^\s<]+@[^\s>]+)/);
-    if (emailMatch) {
-      emailFrom = emailMatch[1];
-    }
+    const emailFromRaw = process.env.EMAIL_FROM || 'onboarding@resend.dev';
+    console.log('[send-csv] EMAIL_FROM raw:', emailFromRaw);
     
-    console.log('[send-csv] From:', emailFrom);
+    // Handle format like "Mesh AI <noreply@domain.com>" - extract just the email
+    const emailMatch = emailFromRaw.match(/<([^>]+)>/) || emailFromRaw.match(/([^\s<]+@[^\s>]+)/);
+    let emailFrom = emailMatch ? emailMatch[1] : emailFromRaw;
+    
+    console.log('[send-csv] From (extracted):', emailFrom);
     console.log('[send-csv] To:', email);
     console.log('[send-csv] API Key present:', !!process.env.RESEND_API_KEY);
     console.log('[send-csv] From domain:', emailFrom.match(/@([^\s>]+)/)?.[1] || 'unknown');
@@ -152,15 +152,23 @@ export default async function handler(req, res) {
           errorMessage = `Email service error (${error.statusCode})`;
         }
         
-        // Check for domain verification errors
+        // Check for domain verification errors - be more specific
         const errorStr = JSON.stringify(error).toLowerCase();
-        if (errorStr.includes('domain') || errorStr.includes('verify') || errorStr.includes('not verified')) {
+        const errorMessageLower = errorMessage.toLowerCase();
+        
+        // Only override if it's clearly a domain verification issue
+        if (errorMessageLower.includes('domain') && 
+            (errorMessageLower.includes('not verified') || 
+             errorMessageLower.includes('unverified') ||
+             errorMessageLower.includes('verify your domain') ||
+             errorMessageLower.includes('domain is not verified'))) {
           errorMessage = 'Domain not verified. Please verify your domain in Resend and update EMAIL_FROM environment variable.';
-        } else if (errorStr.includes('unauthorized') || errorStr.includes('api key')) {
+        } else if (errorMessageLower.includes('unauthorized') || errorMessageLower.includes('api key')) {
           errorMessage = 'Email service authentication failed. Please check your API key.';
-        } else if (errorStr.includes('rate limit') || errorStr.includes('quota')) {
+        } else if (errorMessageLower.includes('rate limit') || errorMessageLower.includes('quota')) {
           errorMessage = 'Email service rate limit reached. Please try again later.';
         }
+        // Otherwise, use the actual Resend error message
       } else if (typeof error === 'string') {
         errorMessage = error;
       }
