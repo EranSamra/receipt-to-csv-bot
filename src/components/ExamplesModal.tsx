@@ -171,7 +171,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
       />
       
       {/* Modal - Full screen on mobile, centered on desktop */}
-      <div className="relative bg-white w-full h-full lg:w-[95vw] lg:h-[90vh] lg:max-w-6xl lg:max-h-[800px] lg:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-hidden">
+      <div className="relative bg-white w-full h-full lg:w-[95vw] lg:h-[90vh] lg:max-w-6xl lg:max-h-[800px] lg:rounded-2xl shadow-2xl flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Close Button */}
         <Button
           variant="ghost"
@@ -261,7 +261,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
             </p>
           </div>
 
-          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[250px] sm:min-h-[300px] lg:min-h-[400px] relative">
+          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[150px] sm:min-h-[250px] lg:min-h-[400px] relative">
             {previewReceipt ? (
               <div key={previewReceipt.id} className="w-full h-full relative">
                 <img
@@ -301,22 +301,27 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
           </div>
 
           {/* Action Buttons - Sticky on mobile */}
-          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 lg:border-t-0 lg:pt-0">
+          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 lg:border-t-0 lg:pt-0 sticky bottom-0 bg-white lg:bg-transparent pb-4 lg:pb-0 z-10">
             <Button
               variant="outline"
               onClick={onClose}
-              className="flex-1 h-12 sm:h-10 order-2 sm:order-1 text-base sm:text-sm"
+              className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
             >
               Cancel
             </Button>
             <Button
               onClick={handleLoadSelected}
               disabled={selectedReceipts.length === 0}
-              className="flex-1 h-12 sm:h-10 bg-[#14b8a6] hover:bg-[#0d9488] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 order-1 sm:order-2 text-base sm:text-sm"
+              className="flex-1 h-12 sm:h-10 bg-[#14b8a6] hover:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-base sm:text-sm"
             >
               <Sparkles className="h-5 w-5 mr-2" />
               Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
             </Button>
+            {selectedReceipts.length === 0 && (
+              <p className="text-xs text-gray-500 text-center mt-1 w-full">
+                Select at least one receipt to continue
+              </p>
+            )}
           </div>
         </div>
       </div>
