@@ -270,15 +270,15 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
         </div>
 
         {/* Preview Section - Full width on mobile, half on desktop */}
-        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col flex-1 lg:flex-none min-h-0">
-          <div className="mb-4 sm:mb-6">
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Preview</h3>
-            <p className="text-sm sm:text-base text-gray-600">
+        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col lg:flex-none">
+          <div className="mb-2 sm:mb-4 lg:mb-6">
+            <h3 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-800 mb-1 sm:mb-2">Preview</h3>
+            <p className="text-xs sm:text-sm lg:text-base text-gray-600">
               {previewReceipt ? `Click thumbnails to preview` : 'Select a receipt to preview'}
             </p>
           </div>
 
-          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[120px] sm:min-h-[200px] lg:min-h-[400px] relative mb-4">
+          <div className="bg-gray-50 rounded-lg overflow-hidden h-[100px] sm:h-[150px] lg:min-h-[400px] lg:flex-1 relative mb-2 sm:mb-4">
             {previewReceipt ? (
               <div key={previewReceipt.id} className="w-full h-full relative">
                 <img
