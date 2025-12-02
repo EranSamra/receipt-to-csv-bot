@@ -81,13 +81,6 @@ const exampleReceipts: ExampleReceipt[] = [
     description: "Taxi, ride-share, or public transport",
     filename: "transport-receipt.png",
     thumbnail: "/sample-receipts/transport-receipt.png"
-  },
-  {
-    id: "entertainment",
-    name: "Entertainment",
-    description: "Movie, concert, or event tickets",
-    filename: "entertainment.png",
-    thumbnail: "/sample-receipts/entertainment.png"
   }
 ];
 
@@ -183,7 +176,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
         </Button>
 
         {/* Thumbnails Section - Full width on mobile, half on desktop */}
-        <div className="lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto flex-1 lg:flex-none lg:max-h-none">
+        <div className="lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto flex-1 lg:flex-none lg:max-h-none pb-28 lg:pb-4">
           <div className="mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Sample Receipts</h2>
             <p className="text-sm sm:text-base text-gray-600">Select receipts to load as examples</p>
@@ -253,7 +246,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
         </div>
 
         {/* Preview Section - Full width on mobile, half on desktop */}
-        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col flex-1 lg:flex-none min-h-0">
+        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col flex-1 lg:flex-none min-h-0 pb-28 lg:pb-4">
           <div className="mb-4 sm:mb-6">
             <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Preview</h3>
             <p className="text-sm sm:text-base text-gray-600">
@@ -261,7 +254,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
             </p>
           </div>
 
-          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[150px] sm:min-h-[250px] lg:min-h-[400px] relative">
+          <div className="flex-1 bg-gray-50 rounded-lg overflow-hidden min-h-[120px] sm:min-h-[200px] lg:min-h-[400px] relative mb-4">
             {previewReceipt ? (
               <div key={previewReceipt.id} className="w-full h-full relative">
                 <img
@@ -300,25 +293,47 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
             )}
           </div>
 
-          {/* Action Buttons - Sticky on mobile */}
-          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200 lg:border-t-0 lg:pt-0 sticky bottom-0 bg-white lg:bg-transparent pb-4 lg:pb-0 z-10">
+          {/* Action Buttons - Desktop: In preview section, Mobile: Fixed at bottom */}
+          {/* Desktop buttons */}
+          <div className="hidden lg:flex flex-row gap-3 pt-4 border-t border-gray-200 mt-auto">
             <Button
               variant="outline"
               onClick={onClose}
-              className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
+              className="flex-1 h-10 text-sm"
             >
               Cancel
             </Button>
             <Button
               onClick={handleLoadSelected}
               disabled={selectedReceipts.length === 0}
-              className="flex-1 h-12 sm:h-10 bg-[#14b8a6] hover:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-base sm:text-sm"
+              className="flex-1 h-10 bg-[#14b8a6] hover:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-sm"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile: Fixed buttons at bottom - Only visible on mobile */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+          <div className="px-4 py-3 flex flex-col gap-3">
+            <Button
+              onClick={handleLoadSelected}
+              disabled={selectedReceipts.length === 0}
+              className="w-full h-14 bg-[#14b8a6] hover:bg-[#0d9488] active:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg text-base touch-manipulation"
             >
               <Sparkles className="h-5 w-5 mr-2" />
               Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
             </Button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="w-full h-12 text-base touch-manipulation border-gray-300"
+            >
+              Cancel
+            </Button>
             {selectedReceipts.length === 0 && (
-              <p className="text-xs text-gray-500 text-center mt-1 w-full">
+              <p className="text-xs text-gray-500 text-center mt-1">
                 Select at least one receipt to continue
               </p>
             )}
