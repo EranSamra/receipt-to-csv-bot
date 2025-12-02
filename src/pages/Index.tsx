@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { LoginModal } from "@/components/LoginModal";
 import { UserMenu } from "@/components/UserMenu";
 import { trackEvent, Events, trackError } from "@/utils/posthogEvents";
+import { getCountryFromPostHog, notifyNonIsraelSignupModal } from "@/utils/getCountryFromPostHog";
 
 const Index = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -593,10 +594,38 @@ const Index = () => {
       const filesToSave = [...selectedFiles];
       console.log(`[Index] Saving ${filesToSave.length} file(s) to pendingFiles for authentication`);
       setPendingFiles(filesToSave);
-      trackEvent(Events.LOGIN_MODAL_OPENED, { 
-        trigger: 'extraction_required',
-        file_count: filesToSave.length 
+      
+      // Get country from PostHog and notify if not from Israel
+      getCountryFromPostHog().then(countryInfo => {
+        if (countryInfo) {
+          trackEvent(Events.LOGIN_MODAL_OPENED, { 
+            trigger: 'extraction_required',
+            file_count: filesToSave.length,
+            country_code: countryInfo.code,
+            country_name: countryInfo.name
+          });
+          
+          // Notify if not from Israel
+          notifyNonIsraelSignupModal(
+            countryInfo.code,
+            countryInfo.name,
+            'extraction_required',
+            filesToSave.length
+          );
+        } else {
+          trackEvent(Events.LOGIN_MODAL_OPENED, { 
+            trigger: 'extraction_required',
+            file_count: filesToSave.length 
+          });
+        }
+      }).catch(() => {
+        // Fallback if country detection fails
+        trackEvent(Events.LOGIN_MODAL_OPENED, { 
+          trigger: 'extraction_required',
+          file_count: filesToSave.length 
+        });
       });
+      
       setShowLoginModal(true);
       return;
     }

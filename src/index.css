@@ -171,7 +171,7 @@
 .modal-title {
   margin: 0 0 6px;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 14px;
   color: #111827;
 }
 
@@ -397,7 +397,7 @@
   /* Desktop font size - match meshpayments.com */
   @media (min-width: 768px) {
     body {
-      font-size: 18px; /* Desktop: 18px as per meshpayments.com */
+      font-size: 14px; /* Desktop: 14px as per meshpayments.com */
     }
   }
 

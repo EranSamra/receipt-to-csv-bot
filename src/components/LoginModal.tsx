@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { trackEvent, Events } from "@/utils/posthogEvents";
+import { getCountryFromPostHog, notifyNonIsraelSignupModal } from "@/utils/getCountryFromPostHog";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -26,7 +27,27 @@ export const LoginModal = ({ isOpen, onClose, onSuccess }: LoginModalProps) => {
   // Track modal open
   useEffect(() => {
     if (isOpen) {
-      trackEvent(Events.LOGIN_MODAL_OPENED);
+      // Get country from PostHog and notify if not from Israel
+      getCountryFromPostHog().then(countryInfo => {
+        if (countryInfo) {
+          trackEvent(Events.LOGIN_MODAL_OPENED, {
+            country_code: countryInfo.code,
+            country_name: countryInfo.name
+          });
+          
+          // Notify if not from Israel
+          notifyNonIsraelSignupModal(
+            countryInfo.code,
+            countryInfo.name,
+            'modal_opened_directly'
+          );
+        } else {
+          trackEvent(Events.LOGIN_MODAL_OPENED);
+        }
+      }).catch(() => {
+        // Fallback if country detection fails
+        trackEvent(Events.LOGIN_MODAL_OPENED);
+      });
     }
   }, [isOpen]);
 

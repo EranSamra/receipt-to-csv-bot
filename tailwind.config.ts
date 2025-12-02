@@ -98,7 +98,7 @@ export default {
         'xs': ['12px', { lineHeight: '1.5' }],
         'sm': ['14px', { lineHeight: '1.5' }],
         'base': ['16px', { lineHeight: '1.5' }], // Mobile default
-        'lg': ['18px', { lineHeight: '1.5' }], // Desktop paragraph (matches meshpayments.com)
+        'lg': ['14px', { lineHeight: '1.5' }], // Desktop paragraph (matches meshpayments.com)
         'xl': ['20px', { lineHeight: '1.4' }],
         '2xl': ['24px', { lineHeight: '1.3' }],
         '3xl': ['28px', { lineHeight: '1.2' }],

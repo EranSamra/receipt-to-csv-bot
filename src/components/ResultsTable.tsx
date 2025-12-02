@@ -46,6 +46,59 @@ interface ResultsTableProps {
   receiptImages?: Map<string, string>; // Map of invoice number to image URL
 }
 
+// Helper function to format date to "Dec 1, 2025" format
+const formatDate = (dateString: string | undefined): string => {
+  if (!dateString || dateString === 'N/A' || dateString === '-') return dateString || 'N/A';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      // If date parsing fails, try to parse common formats
+      const parts = dateString.split(/[-/]/);
+      if (parts.length === 3) {
+        // Try YYYY-MM-DD or MM/DD/YYYY
+        const year = parts[0].length === 4 ? parts[0] : parts[2];
+        const month = parts[0].length === 4 ? parts[1] : parts[0];
+        const day = parts[0].length === 4 ? parts[2] : parts[1];
+        const parsedDate = new Date(`${year}-${month}-${day}`);
+        if (!isNaN(parsedDate.getTime())) {
+          return parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+      return dateString; // Return original if can't parse
+    }
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch (e) {
+    return dateString; // Return original if error
+  }
+};
+
+// Helper function to format numbers with thousand separators (e.g., 1000 -> 1,000)
+const formatNumber = (amountString: string | undefined): string => {
+  if (!amountString || amountString === 'N/A' || amountString === '-') return amountString || 'N/A';
+  
+  try {
+    // Extract number from string (handles cases with currency symbols, spaces, etc.)
+    // Match number with optional decimal part
+    const numberMatch = amountString.match(/-?\d+\.?\d*/);
+    if (!numberMatch) return amountString;
+    
+    const number = parseFloat(numberMatch[0]);
+    if (isNaN(number)) return amountString;
+    
+    // Format number with thousand separators
+    const formatted = number.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    });
+    
+    // Replace the number in the original string with formatted version
+    return amountString.replace(numberMatch[0], formatted);
+  } catch (e) {
+    return amountString; // Return original if error
+  }
+};
+
 export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
   if (data.length === 0) return null;
 
@@ -135,10 +188,10 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
             <DollarSign className="h-6 w-6 text-green-600" />
           </div>
           <h3 className="text-2xl font-bold text-gray-800">
-            {data.reduce((sum, row) => {
+            {formatNumber(data.reduce((sum, row) => {
               const amount = parseFloat(row["Amount"]?.replace(/[^0-9.-]/g, '') || '0');
               return sum + amount;
-            }, 0).toFixed(2)}
+            }, 0).toFixed(2))}
           </h3>
           <p className="text-base md:text-lg text-gray-600">Total Amount</p>
         </div>
@@ -237,7 +290,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           return (
             <div 
               key={`mobile-${index}`}
-              className={`rounded-lg border p-4 ${hasAnyFlag ? 'bg-red-50 border-l-4 border-l-red-500 border-red-200' : 'bg-white border-gray-200'}`}
+              className={`rounded-lg border p-4 bg-white border-gray-200 ${hasAnyFlag ? 'border-l-4 border-l-red-500' : ''}`}
             >
               {/* Flags at top */}
               {hasAnyFlag && (
@@ -299,14 +352,14 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                 
                 {/* Details */}
                 <div className="flex-1 min-w-0">
-                  <div className={`font-semibold text-base ${hasAnyFlag ? 'text-red-800' : 'text-gray-800'} mb-1 truncate`}>
+                  <div className={`font-semibold text-base text-gray-800 mb-1 truncate`}>
                     {row["Merchant"] || 'Unknown'}
                   </div>
-                  <div className={`text-lg font-bold ${hasAnyFlag ? 'text-red-700' : 'text-turquoise-600'}`}>
-                    {row["Amount"]} {row["Currency"]}
+                  <div className={`text-lg font-bold text-turquoise-600`}>
+                    {row["Amount"] ? `${formatNumber(row["Amount"])} ${row["Currency"] || ''}`.trim() : 'N/A'}
                   </div>
-                  <div className={`text-sm ${hasAnyFlag ? 'text-red-600' : 'text-gray-600'} mt-1 whitespace-nowrap`}>
-                    {row["Date"] || 'N/A'}
+                  <div className={`text-sm text-gray-600 mt-1 whitespace-nowrap`}>
+                    {formatDate(row["Date"])}
                   </div>
                   <div className="text-xs text-gray-500 mt-1 truncate">
                     {row["Invoice Number"] || 'No invoice #'}
@@ -363,7 +416,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                     Amount
                   </div>
                 </TableHead>
-                <TableHead className="font-semibold text-gray-700 text-base md:text-lg">Currency</TableHead>
                 <TableHead className="font-semibold text-gray-700 text-base md:text-lg">
                   <div className="flex items-center gap-2">
                     <Building className="h-4 w-4 text-turquoise-600" />
@@ -399,10 +451,10 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                   // Get notes from backend
                   const notes = row["Notes"] || '';
                   
-                  // Color scheme: ALL flagged items get red styling
-                  const rowColor = hasAnyFlag ? 'bg-red-50 border-red-200' : '';
-                  const textColor = hasAnyFlag ? 'text-red-800' : 'text-gray-800';
-                  const textColorSecondary = hasAnyFlag ? 'text-red-600' : 'text-gray-600';
+                  // Color scheme: flagged items get red left border, but regular text colors
+                  const rowColor = '';
+                  const textColor = 'text-gray-800';
+                  const textColorSecondary = 'text-gray-600';
                   const borderLeft = hasAnyFlag ? 'border-l-4 border-l-red-500' : '';
                   
                   return (
@@ -480,15 +532,12 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                           {row["Invoice Number"] || '-'}
                         </TableCell>
                         <TableCell className={`${textColorSecondary} text-base md:text-lg whitespace-nowrap`}>
-                          {row["Date"] || 'N/A'}
+                          {formatDate(row["Date"])}
                         </TableCell>
                         <TableCell className={`font-semibold ${textColor} text-base md:text-lg`}>
-                          {row["Amount"] || 'N/A'}
+                          {row["Amount"] ? `${formatNumber(row["Amount"])}${row["Currency"] ? ` ${row["Currency"]}` : ''}` : 'N/A'}
                         </TableCell>
-                        <TableCell className={`${textColorSecondary} text-base md:text-lg`}>
-                          {row["Currency"] || 'N/A'}
-                </TableCell>
-                        <TableCell className={`${hasAnyFlag ? 'text-red-700 font-semibold' : 'text-gray-700'} text-base md:text-lg`}>
+                        <TableCell className={`text-gray-700 font-semibold text-base md:text-lg`}>
                           {row["Merchant"]?.replace("DUPLICATE RECEIPT UPLOADED", "").trim() || row["Merchant"] || 'N/A'}
                 </TableCell>
                         <TableCell>
@@ -566,13 +615,10 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                             </div>
                           </TableCell>
                           <TableCell className={`text-base md:text-lg ${textColorSecondary} whitespace-nowrap`}>
-                            {lineItem.date || row["Date"] || 'N/A'}
+                            {formatDate(lineItem.date || row["Date"])}
                           </TableCell>
                           <TableCell className={`text-base md:text-lg font-medium ${textColor}`}>
-                            {lineItem.amount}
-                          </TableCell>
-                          <TableCell className={`text-base md:text-lg ${textColorSecondary}`}>
-                            {row["Currency"] || 'N/A'}
+                            {lineItem.amount ? `${formatNumber(lineItem.amount)}${row["Currency"] ? ` ${row["Currency"]}` : ''}` : '-'}
                           </TableCell>
                           <TableCell className={`text-base md:text-lg ${textColorSecondary}`}>
                             {lineItem.category || '-'}

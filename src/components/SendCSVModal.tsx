@@ -119,7 +119,7 @@ export const SendCSVModal = ({ isOpen, onClose, extractedRows }: SendCSVModalPro
 
       toast({
         title: 'CSV sent',
-        description: 'Check your inbox.',
+        description: 'Check your inbox (or spam folder).',
       });
 
       setTimeout(() => {
