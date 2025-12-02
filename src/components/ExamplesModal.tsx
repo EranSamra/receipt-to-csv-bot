@@ -176,10 +176,34 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
         </Button>
 
         {/* Thumbnails Section - Full width on mobile, half on desktop */}
-        <div className="lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto flex-1 lg:flex-none lg:max-h-none pb-28 lg:pb-4">
+        <div className="lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto flex-1 lg:flex-none lg:max-h-none">
           <div className="mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Sample Receipts</h2>
             <p className="text-sm sm:text-base text-gray-600">Select receipts to load as examples</p>
+          </div>
+
+          {/* Mobile: Action Buttons - Prominent at top, always visible with sticky */}
+          <div className="lg:hidden mb-4 pb-4 border-b border-gray-200 sticky top-0 bg-white z-10 -mx-4 -mt-4 px-4 pt-4 shadow-sm">
+            <Button
+              onClick={handleLoadSelected}
+              disabled={selectedReceipts.length === 0}
+              className="w-full h-14 bg-[#14b8a6] hover:bg-[#0d9488] active:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg text-base touch-manipulation mb-2"
+            >
+              <Sparkles className="h-5 w-5 mr-2" />
+              Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="w-full h-12 text-base touch-manipulation border-gray-300"
+            >
+              Cancel
+            </Button>
+            {selectedReceipts.length === 0 && (
+              <p className="text-xs text-gray-500 text-center mt-2">
+                Select at least one receipt to continue
+              </p>
+            )}
           </div>
 
           {/* Single column layout - mobile optimized, desktop unchanged */}
@@ -246,7 +270,7 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
         </div>
 
         {/* Preview Section - Full width on mobile, half on desktop */}
-        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col flex-1 lg:flex-none min-h-0 pb-28 lg:pb-4">
+        <div className="lg:w-1/2 p-4 sm:p-6 flex flex-col flex-1 lg:flex-none min-h-0">
           <div className="mb-4 sm:mb-6">
             <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Preview</h3>
             <p className="text-sm sm:text-base text-gray-600">
@@ -311,32 +335,6 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
               <Sparkles className="h-4 w-4 mr-2" />
               Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
             </Button>
-          </div>
-        </div>
-
-        {/* Mobile: Fixed buttons at bottom - Only visible on mobile */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
-          <div className="px-4 py-3 flex flex-col gap-3">
-            <Button
-              onClick={handleLoadSelected}
-              disabled={selectedReceipts.length === 0}
-              className="w-full h-14 bg-[#14b8a6] hover:bg-[#0d9488] active:bg-[#0d9488] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-lg text-base touch-manipulation"
-            >
-              <Sparkles className="h-5 w-5 mr-2" />
-              Extract Data {selectedReceipts.length > 0 && `(${selectedReceipts.length})`}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="w-full h-12 text-base touch-manipulation border-gray-300"
-            >
-              Cancel
-            </Button>
-            {selectedReceipts.length === 0 && (
-              <p className="text-xs text-gray-500 text-center mt-1">
-                Select at least one receipt to continue
-              </p>
-            )}
           </div>
         </div>
       </div>
