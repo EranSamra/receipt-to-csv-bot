@@ -97,7 +97,7 @@ app.post('/api/extract-receipts', upload.array('files', 30), async (req, res) =>
         const base64 = encodeBase64(file.buffer);
         
         // Call Gemini API with new JSON-based prompt
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
