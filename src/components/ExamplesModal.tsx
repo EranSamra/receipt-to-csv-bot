@@ -88,14 +88,8 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
   const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
   const [previewReceipt, setPreviewReceipt] = useState<ExampleReceipt | null>(null);
 
-  // Track modal open/close
-  useEffect(() => {
-    if (isOpen) {
-      trackEvent(Events.EXAMPLES_MODAL_OPENED);
-    } else {
-      trackEvent(Events.EXAMPLES_MODAL_CLOSED);
-    }
-  }, [isOpen]);
+  // Note: Modal open/close tracking is handled by parent component (Index.tsx)
+  // to avoid duplicate events
 
   if (!isOpen) return null;
 
@@ -143,11 +137,8 @@ export const ExamplesModal = ({ isOpen, onClose, onLoadSelected }: ExamplesModal
     }
 
     if (files.length > 0) {
-      trackEvent(Events.EXAMPLES_LOADED, {
-        example_count: files.length,
-        receipt_ids: selectedReceipts
-      });
-      
+      // Note: EXAMPLES_LOADED tracking is handled by parent component (Index.tsx)
+      // to avoid duplicate events
       onLoadSelected(files);
       onClose();
       setSelectedReceipts([]);

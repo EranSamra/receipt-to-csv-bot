@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { trackEvent, Events } from '@/utils/posthogEvents';
@@ -19,12 +19,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const lastAuthEventRef = React.useRef<{ event: string; timestamp: number } | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('[AuthContext] Auth state changed:', event);
+        
+        // Prevent duplicate events within 1 second (handles React double-renders or rapid state changes)
+        const now = Date.now();
+        const lastEvent = lastAuthEventRef.current;
+        if (lastEvent && lastEvent.event === event && (now - lastEvent.timestamp) < 1000) {
+          console.log('[AuthContext] Skipping duplicate auth event:', event);
+          return;
+        }
+        lastAuthEventRef.current = { event, timestamp: now };
         
         trackEvent(Events.AUTH_STATE_CHANGED, {
           event_type: event,
