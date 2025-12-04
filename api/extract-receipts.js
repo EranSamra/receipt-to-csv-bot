@@ -1,3 +1,5 @@
+import { isExampleReceipt, getCachedResult, saveCachedResult, simulateProcessingDelay } from './cache-utils.js';
+
 // Simple base64 encoding function
 function encodeBase64(buffer) {
   return Buffer.from(buffer, 'binary').toString('base64');
@@ -149,6 +151,43 @@ export default async function handler(req, res) {
     for (const file of files) {
       try {
         console.log(`Processing file: ${file.filename}, size: ${file.data.length} bytes`);
+        
+        // Check if this is an example receipt and if we have cached results
+        const isExample = isExampleReceipt(file.filename);
+        let cachedResult = null;
+        
+        if (isExample) {
+          console.log(`[Cache] Checking cache for example: ${file.filename}`);
+          cachedResult = getCachedResult(file.filename);
+          
+          if (cachedResult) {
+            // Simulate processing delay to maintain realistic UX
+            await simulateProcessingDelay();
+            
+            // Return cached result(s) - handle both single and array formats
+            if (Array.isArray(cachedResult)) {
+              // Multiple receipts cached
+              cachedResult.forEach(cached => {
+                results.push({
+                  filename: file.filename,
+                  csv: cached.csv,
+                  lineItems: cached.lineItems || []
+                });
+              });
+            } else {
+              // Single receipt cached
+              results.push({
+                filename: file.filename,
+                csv: cachedResult.csv,
+                lineItems: cachedResult.lineItems || []
+              });
+            }
+            console.log(`[Cache] ✅ Using cached result for ${file.filename}`);
+            continue; // Skip Gemini API call
+          } else {
+            console.log(`[Cache] ❌ Cache miss for ${file.filename}, calling Gemini API...`);
+          }
+        }
         
         // Check file size limit (1MB max)
         if (file.data.length > 1024 * 1024) {
@@ -403,6 +442,25 @@ ROBUSTNESS:
             console.log(`✅ Extracted ${lineItems.length} line items for ${file.filename}`);
           }
           console.log(`✅ Successfully processed ${file.filename}: ${jsonReceipts.length} receipt(s) extracted`);
+          
+          // Save to cache if this is an example receipt
+          if (isExample && jsonReceipts.length > 0) {
+            // Collect all results for this file
+            const fileResults = results.filter(r => r.filename === file.filename);
+            if (fileResults.length > 0) {
+              // Cache all receipts from this file
+              const cacheData = fileResults.length === 1 
+                ? {
+                    csv: fileResults[0].csv,
+                    lineItems: fileResults[0].lineItems || []
+                  }
+                : fileResults.map(r => ({
+                    csv: r.csv,
+                    lineItems: r.lineItems || []
+                  }));
+              saveCachedResult(file.filename, cacheData);
+            }
+          }
         }
         
       } catch (error) {

@@ -15,14 +15,16 @@ export async function compressImageIfNeeded(
     return file;
   }
 
-  // Check if file is already small enough
   const fileSizeKB = file.size / 1024;
-  if (fileSizeKB <= maxSizeKB) {
-    console.log(`[ImageCompression] File ${file.name} is ${fileSizeKB.toFixed(1)}KB, no compression needed`);
-    return file;
+  const shouldCompressForSize = fileSizeKB > maxSizeKB;
+  
+  // Always optimize for Gemini 2.0 Flash pricing (768px width = 1 tile column)
+  // We'll check the actual image dimensions during processing
+  if (!shouldCompressForSize) {
+    console.log(`[ImageCompression] File ${file.name} is ${fileSizeKB.toFixed(1)}KB, checking if optimization needed for Gemini pricing...`);
+  } else {
+    console.log(`[ImageCompression] File ${file.name} is ${fileSizeKB.toFixed(1)}KB, compressing...`);
   }
-
-  console.log(`[ImageCompression] File ${file.name} is ${fileSizeKB.toFixed(1)}KB, compressing...`);
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -31,26 +33,25 @@ export async function compressImageIfNeeded(
       const img = new Image();
       
       img.onload = () => {
-        // Calculate new dimensions to reduce file size
-        // Try to keep aspect ratio while reducing size
-        let width = img.width;
-        let height = img.height;
-        const maxDimension = 2048; // Max width or height
+        // Receipt Optimization: Fix width to 768px for Gemini 2.0 Flash pricing
+        // Gemini 2.0 charges per 768x768 tile. By fixing width to 768px, we guarantee
+        // paying for only 1 column of tiles, whereas full-resolution might span 3-4 columns.
+        // Always apply this optimization to reduce token costs, regardless of file size.
+        const targetWidth = 768;
+        const aspectRatio = img.height / img.width;
+        const targetHeight = Math.round(targetWidth * aspectRatio);
         
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = (height / width) * maxDimension;
-            width = maxDimension;
-          } else {
-            width = (width / height) * maxDimension;
-            height = maxDimension;
-          }
+        // If image is already 768px or smaller and file size is acceptable, return original
+        if (img.width <= targetWidth && fileSizeKB <= maxSizeKB) {
+          console.log(`[ImageCompression] File ${file.name} already optimized (${img.width}px width, ${fileSizeKB.toFixed(1)}KB)`);
+          resolve(file);
+          return;
         }
-
+        
         // Create canvas and compress
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
@@ -58,8 +59,38 @@ export async function compressImageIfNeeded(
           return;
         }
 
-        // Draw image to canvas with new dimensions
-        ctx.drawImage(img, 0, 0, width, height);
+        // Convert to grayscale (L channel) to reduce file size
+        // Create a temporary canvas to convert to grayscale
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) {
+          reject(new Error('Could not get temporary canvas context'));
+          return;
+        }
+        
+        // Draw original image to temp canvas
+        tempCtx.drawImage(img, 0, 0);
+        
+        // Get image data and convert to grayscale
+        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          // Convert RGB to grayscale using luminance formula (L channel)
+          const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+          data[i] = gray;     // R
+          data[i + 1] = gray; // G
+          data[i + 2] = gray; // B
+          // Alpha channel (data[i + 3]) remains unchanged
+        }
+        
+        // Put grayscale data back
+        tempCtx.putImageData(imageData, 0, 0);
+        
+        // Draw grayscale image to final canvas with target dimensions
+        ctx.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
 
         // Convert to blob with compression
         canvas.toBlob(

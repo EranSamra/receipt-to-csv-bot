@@ -167,8 +167,11 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
   const alcoholTobaccoCount = data.filter(row => row["Alcohol/Tobacco"]?.toLowerCase() === 'yes').length;
   const personalExpenseCount = data.filter(row => row["Personal Expense"]?.toLowerCase().includes('suspicious')).length;
   
-  // Filter data based on showFlaggedOnly
-  const filteredData = showFlaggedOnly ? data.filter(hasAnyFlagCheck) : data;
+  // Filter data based on showFlaggedOnly, preserving original indices
+  const filteredDataWithIndices = showFlaggedOnly 
+    ? data.map((row, originalIndex) => ({ row, originalIndex })).filter(({ row }) => hasAnyFlagCheck(row))
+    : data.map((row, originalIndex) => ({ row, originalIndex }));
+  const filteredData = filteredDataWithIndices.map(({ row }) => row);
   const flaggedCount = data.filter(hasAnyFlagCheck).length;
 
   return (
@@ -276,7 +279,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
 
       {/* Mobile: Card Layout */}
       <div className="block lg:hidden space-y-3 mb-6">
-        {filteredData.map((row, index) => {
+        {filteredDataWithIndices.map(({ row, originalIndex }, index) => {
           const isDuplicate = row["Duplicate"]?.toLowerCase() === 'yes';
           const fraudRisk = row["Fraud Risk"]?.toLowerCase() || 'low';
           const hasAlcoholTobacco = row["Alcohol/Tobacco"]?.toLowerCase() === 'yes';
@@ -284,7 +287,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           const hasAnyFlag = isDuplicate || (fraudRisk === 'high' || fraudRisk === 'medium') || hasAlcoholTobacco || hasPersonalExpense;
           const invoiceNumber = row["Invoice Number"] || '';
           const receiptImageUrl = row.receiptImage || 
-            (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${index}`));
+            (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${originalIndex}`));
           const notes = row["Notes"] || '';
           
           return (
@@ -432,21 +435,21 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           </TableHeader>
           <TableBody>
               <TooltipProvider delayDuration={300}>
-                {filteredData.map((row, index) => {
+                {filteredDataWithIndices.map(({ row, originalIndex }, index) => {
                   const isDuplicate = row["Duplicate"]?.toLowerCase() === 'yes';
                   const fraudRisk = row["Fraud Risk"]?.toLowerCase() || 'low';
                   const hasAlcoholTobacco = row["Alcohol/Tobacco"]?.toLowerCase() === 'yes';
                   const hasPersonalExpense = row["Personal Expense"]?.toLowerCase().includes('suspicious');
                   const hasLineItems = row.lineItems && row.lineItems.length > 0;
-                  const isExpanded = expandedRows.has(index);
+                  const isExpanded = expandedRows.has(originalIndex);
                   
                   // Detect ANY flag (all flags should be red)
                   const hasAnyFlag = isDuplicate || (fraudRisk === 'high' || fraudRisk === 'medium') || hasAlcoholTobacco || hasPersonalExpense;
                   
-                  // Get receipt image URL
+                  // Get receipt image URL - use originalIndex to find the correct image
                   const invoiceNumber = row["Invoice Number"] || '';
                   const receiptImageUrl = row.receiptImage || 
-                    (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${index}`));
+                    (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${originalIndex}`));
                   
                   // Get notes from backend
                   const notes = row["Notes"] || '';
@@ -467,7 +470,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                         <TableCell>
                           {hasLineItems && (
                             <button
-                              onClick={() => toggleRow(index)}
+                              onClick={() => toggleRow(originalIndex)}
                               className="p-1 hover:bg-gray-200 rounded transition-colors"
                               aria-label={isExpanded ? "Collapse line items" : "Expand line items"}
                             >

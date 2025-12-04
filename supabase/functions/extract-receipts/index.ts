@@ -25,9 +25,6 @@ const EXTRACTION_PROMPT = `Extract data from this receipt/invoice with the follo
 - all_dates (JSON array of all ISO 8601 dates found)
 - spend_category (one of: ${spendCategoriesNames})
 
-CSV Header (exact order):
-source_filename,is_receipt,total_amount,vat_amount,currency_ISO_4217,merchant_name_localized,date_ISO_8601,is_month_explicit,receipt_id,merchant_address,document_language_ISO_639,all_totals,all_dates,spend_category
-
 Field rules:
 - source_filename: original file name
 - is_receipt: boolean (true/false)
@@ -53,7 +50,9 @@ Special instructions:
 - Extract VAT amounts even if shown as percentages
 
 Return format:
-Output only the CSV text with header and one row. No markdown, no code fences, no explanations.`;
+Output ONLY the CSV data row (no header row). The header is already defined in the code.
+Format: source_filename,is_receipt,total_amount,vat_amount,currency_ISO_4217,merchant_name_localized,date_ISO_8601,is_month_explicit,receipt_id,merchant_address,document_language_ISO_639,all_totals,all_dates,spend_category
+No markdown, no code fences, no explanations, no header row.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -121,21 +120,29 @@ serve(async (req) => {
         console.log(`Successfully encoded ${file.name}`);
 
         // Call Gemini API for this single file
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        // CRITICAL: Use gemini-2.0-flash-001 (with -001 suffix) to force Flash model and prevent routing to expensive Gemini 2.5 Pro
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
           headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
             contents: [{
               parts: [
                 { text: `${EXTRACTION_PROMPT}\n\nProcess this receipt image and return a CSV with one row.` },
-                { inline_data: { mime_type: file.type, data: base64 } }
+                { 
+                  // CRITICAL: Ensure correct format to prevent Google from misclassifying as "Image Generation"
+                  inline_data: { 
+                    mime_type: "image/jpeg", // Force JPEG to prevent misclassification
+                    data: base64 
+                  }
+                }
               ]
             }],
             generationConfig: {
               temperature: 0.1,
               topK: 32,
               topP: 1,
-              maxOutputTokens: 4096,
+              maxOutputTokens: 1000, // CRITICAL: Strictly limit to 1000 tokens to prevent infinite loop and massive output token costs
+              stopSequences: ["```json", "}", "\n\n"], // CRITICAL: Force model to stop as soon as it finishes the JSON/CSV
             }
           })
     });
@@ -153,9 +160,10 @@ serve(async (req) => {
         const data = await response.json();
         const csvContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         
-        // Extract just the data row (skip header if present)
-        const lines = csvContent.trim().split('\n');
-        const dataRow = lines.length > 1 ? lines[1] : lines[0];
+        // Extract the data row (no header expected, but handle it if present)
+        const lines = csvContent.trim().split('\n').filter(line => line.trim());
+        // Take the first line that looks like data (contains commas and isn't just the header text)
+        const dataRow = lines.find(line => line.includes(',') && !line.toLowerCase().includes('source_filename')) || lines[0] || '';
         
         results.push({
           filename: file.name,

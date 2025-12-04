@@ -650,6 +650,12 @@ const Index = () => {
       file_types: selectedFiles.map(f => f.type || 'unknown'),
       total_size_mb: (selectedFiles.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2)
     });
+    
+    // Explicit tracking for Extract button click
+    trackEvent('receipt_extraction_started', {
+      file_count: selectedFiles.length,
+      manual_entry: false
+    });
 
     // Proceed with extraction
     proceedWithExtraction();

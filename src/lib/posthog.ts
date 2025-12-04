@@ -17,11 +17,20 @@ const isPostHogInternalError = (error: any): boolean => {
 // Initialize PostHog
 export const initPostHog = () => {
   if (typeof window !== 'undefined') {
+    // Check for localhost
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Skip initialization on localhost - events will be logged to console only
+    if (isLocal) {
+      console.log('[PostHog] Localhost detected - Events will be logged to console only');
+      return;
+    }
+    
     try {
       posthog.init('phc_kSsmb6ik2SkurBjueH4AFYPK4D50w9yTPIwKdb0Xtc3', {
         api_host: 'https://us.i.posthog.com',
         person_profiles: 'identified_only', // Only create profiles for identified users
-        autocapture: true, // Automatically capture clicks, page views, etc.
+        autocapture: false, // Disabled to stop noisy "Click" events - we track meaningful actions explicitly
         capture_pageview: true, // Capture page views
         capture_pageleave: true, // Capture when users leave the page
         loaded: (posthogInstance) => {

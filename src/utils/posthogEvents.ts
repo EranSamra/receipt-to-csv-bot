@@ -2,14 +2,18 @@ import { posthog } from '@/lib/posthog';
 
 // Helper to safely capture events (checks if PostHog is loaded)
 export const trackEvent = (eventName: string, properties?: Record<string, any>) => {
+  // Always log to console in dev mode or on localhost for verification
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  if (import.meta.env.DEV || isLocal) {
+    console.log('[PostHog] 📡 Event:', eventName, properties || {});
+  }
+  
+  // Only send to PostHog if initialized and not on localhost
   if (typeof window !== 'undefined' && posthog) {
-    // Debug logging in development
-    if (import.meta.env.DEV) {
-      console.log('[PostHog] 📊 Event:', eventName, properties || {});
+    if (!isLocal) {
+      posthog.capture(eventName, properties);
     }
-    posthog.capture(eventName, properties);
-  } else if (import.meta.env.DEV) {
-    console.warn('[PostHog] ⚠️ PostHog not available. Event not tracked:', eventName);
   }
 };
 
