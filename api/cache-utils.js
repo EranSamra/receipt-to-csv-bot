@@ -1,17 +1,42 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const CACHE_DIR = '/tmp/receipt-cache';
-const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+// Get the directory of the current module (works in both Node.js and Vercel)
+let __dirname;
+try {
+  const __filename = fileURLToPath(import.meta.url);
+  __dirname = path.dirname(__filename);
+} catch (e) {
+  // Fallback for environments where import.meta.url might not work
+  __dirname = path.resolve('.');
+}
 
-// Ensure cache directory exists
+// Persistent cache directory (in repo, committed to git)
+const PERSISTENT_CACHE_DIR = path.join(__dirname, 'example-cache');
+// Ephemeral cache directory (in /tmp, cleared between Vercel invocations)
+const EPHEMERAL_CACHE_DIR = '/tmp/receipt-cache';
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds (not used for persistent cache)
+
+// Ensure cache directory exists (for ephemeral cache only)
 function ensureCacheDir() {
   try {
-    if (!fs.existsSync(CACHE_DIR)) {
-      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    if (!fs.existsSync(EPHEMERAL_CACHE_DIR)) {
+      fs.mkdirSync(EPHEMERAL_CACHE_DIR, { recursive: true });
     }
   } catch (error) {
-    console.warn('[Cache] Failed to create cache directory:', error.message);
+    console.warn('[Cache] Failed to create ephemeral cache directory:', error.message);
+  }
+}
+
+// Ensure persistent cache directory exists
+function ensurePersistentCacheDir() {
+  try {
+    if (!fs.existsSync(PERSISTENT_CACHE_DIR)) {
+      fs.mkdirSync(PERSISTENT_CACHE_DIR, { recursive: true });
+    }
+  } catch (error) {
+    console.warn('[Cache] Failed to create persistent cache directory:', error.message);
   }
 }
 
@@ -65,67 +90,99 @@ export function isExampleReceipt(filename) {
   return isMatch;
 }
 
-// Get cached result
+// Get cached result - checks persistent cache first, then ephemeral cache
 export function getCachedResult(filename) {
+  const cacheKey = getCacheKey(filename);
+  
+  // First, try persistent cache (in repo)
+  try {
+    const persistentCachePath = path.join(PERSISTENT_CACHE_DIR, `${cacheKey}.json`);
+    if (fs.existsSync(persistentCachePath)) {
+      const cached = JSON.parse(fs.readFileSync(persistentCachePath, 'utf8'));
+      console.log(`[Cache] ✅ Persistent cache hit for ${filename}`);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:85',message:'Persistent cache hit',data:{filename:filename,hasData:!!cached.data,dataType:Array.isArray(cached.data)?'array':typeof cached.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      return cached.data;
+    }
+  } catch (error) {
+    console.warn(`[Cache] Failed to read persistent cache for ${filename}:`, error.message);
+  }
+  
+  // Fallback to ephemeral cache (in /tmp)
   try {
     ensureCacheDir();
-    const cacheKey = getCacheKey(filename);
-    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
+    const ephemeralCachePath = path.join(EPHEMERAL_CACHE_DIR, `${cacheKey}.json`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:47',message:'Cache get attempt',data:{filename:filename,cacheKey:cacheKey,cachePath:cachePath,cacheDir:CACHE_DIR,dirExists:fs.existsSync(CACHE_DIR),fileExists:fs.existsSync(cachePath)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:95',message:'Checking ephemeral cache',data:{filename:filename,cacheKey:cacheKey,cachePath:ephemeralCachePath,dirExists:fs.existsSync(EPHEMERAL_CACHE_DIR),fileExists:fs.existsSync(ephemeralCachePath)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     
-    if (!fs.existsSync(cachePath)) {
+    if (!fs.existsSync(ephemeralCachePath)) {
       return null;
     }
     
-    const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    const cached = JSON.parse(fs.readFileSync(ephemeralCachePath, 'utf8'));
     
-    // Check if cache is expired
+    // Check if cache is expired (only for ephemeral cache)
     if (Date.now() - cached.timestamp > CACHE_TTL) {
-      fs.unlinkSync(cachePath); // Delete expired cache
+      fs.unlinkSync(ephemeralCachePath); // Delete expired cache
       return null;
     }
     
-    console.log(`[Cache] ✅ Cache hit for ${filename}`);
+    console.log(`[Cache] ✅ Ephemeral cache hit for ${filename}`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:65',message:'Cache hit',data:{filename:filename,hasData:!!cached.data,dataType:Array.isArray(cached.data)?'array':typeof cached.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:108',message:'Ephemeral cache hit',data:{filename:filename,hasData:!!cached.data,dataType:Array.isArray(cached.data)?'array':typeof cached.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     return cached.data;
   } catch (error) {
-    console.warn(`[Cache] Failed to read cache for ${filename}:`, error.message);
+    console.warn(`[Cache] Failed to read ephemeral cache for ${filename}:`, error.message);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:68',message:'Cache get error',data:{filename:filename,error:error.message,errorType:error?.constructor?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:112',message:'Cache get error',data:{filename:filename,error:error.message,errorType:error?.constructor?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     return null;
   }
 }
 
-// Save result to cache
-export function saveCachedResult(filename, data) {
+// Save result to cache (saves to persistent cache for examples, ephemeral for others)
+export function saveCachedResult(filename, data, usePersistent = false) {
+  const cacheKey = getCacheKey(filename);
+  const cacheEntry = {
+    timestamp: Date.now(),
+    filename,
+    data
+  };
+  
+  // Save to persistent cache if requested (for examples)
+  if (usePersistent) {
+    try {
+      ensurePersistentCacheDir();
+      const persistentCachePath = path.join(PERSISTENT_CACHE_DIR, `${cacheKey}.json`);
+      fs.writeFileSync(persistentCachePath, JSON.stringify(cacheEntry, null, 2));
+      console.log(`[Cache] 💾 Saved to persistent cache for ${filename}`);
+      return;
+    } catch (error) {
+      console.warn(`[Cache] Failed to save to persistent cache for ${filename}:`, error.message);
+      // Fall through to ephemeral cache
+    }
+  }
+  
+  // Save to ephemeral cache (default)
   try {
     ensureCacheDir();
-    const cacheKey = getCacheKey(filename);
-    const cachePath = path.join(CACHE_DIR, `${cacheKey}.json`);
+    const ephemeralCachePath = path.join(EPHEMERAL_CACHE_DIR, `${cacheKey}.json`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:74',message:'Cache save attempt',data:{filename:filename,cachePath:cachePath,dirExists:fs.existsSync(CACHE_DIR),dataType:Array.isArray(data)?'array':typeof data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:140',message:'Cache save attempt',data:{filename:filename,cachePath:ephemeralCachePath,dirExists:fs.existsSync(EPHEMERAL_CACHE_DIR),dataType:Array.isArray(data)?'array':typeof data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
     
-    const cacheEntry = {
-      timestamp: Date.now(),
-      filename,
-      data
-    };
-    
-    fs.writeFileSync(cachePath, JSON.stringify(cacheEntry, null, 2));
+    fs.writeFileSync(ephemeralCachePath, JSON.stringify(cacheEntry, null, 2));
     console.log(`[Cache] 💾 Cached result for ${filename}`);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:87',message:'Cache save success',data:{filename:filename,fileWritten:fs.existsSync(cachePath)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:147',message:'Cache save success',data:{filename:filename,fileWritten:fs.existsSync(ephemeralCachePath)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
   } catch (error) {
     console.warn(`[Cache] Failed to save cache for ${filename}:`, error.message);
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:89',message:'Cache save error',data:{filename:filename,error:error.message,errorType:error?.constructor?.name,code:error?.code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:150',message:'Cache save error',data:{filename:filename,error:error.message,errorType:error?.constructor?.name,code:error?.code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
   }
 }

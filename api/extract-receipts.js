@@ -474,7 +474,7 @@ ROBUSTNESS:
           }
           console.log(`✅ Successfully processed ${file.filename}: ${jsonReceipts.length} receipt(s) extracted`);
           
-          // Save to cache if this is an example receipt
+          // Save to cache if this is an example receipt (use persistent cache)
           if (isExample && jsonReceipts.length > 0) {
             // Collect all results for this file
             const fileResults = results.filter(r => r.filename === file.filename);
@@ -489,9 +489,10 @@ ROBUSTNESS:
                     csv: r.csv,
                     lineItems: r.lineItems || []
                   }));
-              saveCachedResult(file.filename, cacheData);
+              // Save to persistent cache (committed to repo) for examples
+              saveCachedResult(file.filename, cacheData, true);
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:485',message:'Cache save attempt',data:{filename:file.filename,isExample:isExample,resultCount:fileResults.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+              fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:485',message:'Cache save attempt',data:{filename:file.filename,isExample:isExample,resultCount:fileResults.length,usePersistent:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
               // #endregion
             }
           }
