@@ -19,14 +19,25 @@ Copy and paste these **exact** values into your Vercel dashboard.
 ### 1. Gemini API Key
 ```
 Name: GEMINI_API_KEY
-Value: AIzaSyDFPgjOr32jptNdfFjanuP2Qfy7b2vXBTU
+Value: [YOUR_GEMINI_API_KEY_HERE]
 ```
+**How to get:**
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key (starts with `AIzaSy...`)
+5. Paste it as the value above
 
 ### 2. PostHog Analytics Key
 ```
 Name: VITE_POSTHOG_KEY
-Value: phc_kSsmb6ik2SkurBjueH4AFYPK4D50w9yTPIwKdb0Xtc3
+Value: [YOUR_POSTHOG_KEY_HERE]
 ```
+**How to get:**
+1. Go to [PostHog Dashboard](https://app.posthog.com/project/settings)
+2. Navigate to Project Settings
+3. Copy your Project API Key
+4. Paste it as the value above
 
 ### 3. Supabase Project URL
 ```
@@ -95,8 +106,8 @@ Value: [GET FROM: Supabase Dashboard → Settings → API]
 Copy each line and add to Vercel:
 
 ```
-✅ GEMINI_API_KEY = AIzaSyDFPgjOr32jptNdfFjanuP2Qfy7b2vXBTU
-✅ VITE_POSTHOG_KEY = phc_kSsmb6ik2SkurBjueH4AFYPK4D50w9yTPIwKdb0Xtc3
+✅ GEMINI_API_KEY = [YOUR_GEMINI_API_KEY_HERE]
+✅ VITE_POSTHOG_KEY = [YOUR_POSTHOG_KEY_HERE]
 ✅ VITE_SUPABASE_URL = https://cuqwxshipriohsmrymzy.supabase.co
 ⏳ RESEND_API_KEY = [GET FROM RESEND.COM]
 ⏳ EMAIL_FROM = Mesh AI <onboarding@resend.dev>
@@ -128,8 +139,8 @@ After redeploying, you can verify in Vercel:
 
 - **Resend API Key:** https://resend.com/api-keys
 - **Supabase Keys:** https://supabase.com/dashboard/project/cuqwxshipriohsmrymzy/settings/api
-- **Gemini API Key:** Already provided above ✅
-- **PostHog Key:** Already provided above ✅
+- **Gemini API Key:** Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- **PostHog Key:** Get from [PostHog Dashboard](https://app.posthog.com/project/settings)
 
 ---
 

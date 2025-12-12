@@ -20,7 +20,7 @@
 2. **Click "Environment Variables"**
 3. **Add New Variable**:
    - **Name**: `GEMINI_API_KEY`
-   - **Value**: `AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY`
+   - **Value**: `[YOUR_GEMINI_API_KEY_HERE]` (Get from [Google AI Studio](https://makersuite.google.com/app/apikey))
    - **Environment**: Check all (Production, Preview, Development)
 4. **Save and Redeploy**
 

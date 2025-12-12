@@ -14,8 +14,13 @@ This document lists all environment variables that need to be configured in your
 
 **Example:**
 ```
-GEMINI_API_KEY=AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY
+GEMINI_API_KEY=[YOUR_GEMINI_API_KEY_HERE]
 ```
+**How to get:**
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key (starts with `AIzaSy...`)
 
 ---
 
@@ -124,8 +129,12 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 **Example:**
 ```
-VITE_POSTHOG_KEY=phc_kSsmb6ik2SkurBjueH4AFYPK4D50w9yTPIwKdb0Xtc3
+VITE_POSTHOG_KEY=[YOUR_POSTHOG_KEY_HERE]
 ```
+**How to get:**
+1. Go to [PostHog Dashboard](https://app.posthog.com/project/settings)
+2. Navigate to Project Settings
+3. Copy your Project API Key
 
 **Note:** Currently hardcoded in the code. Consider moving to environment variable.
 
