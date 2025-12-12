@@ -402,6 +402,12 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                 </TableHead>
                 <TableHead className="font-semibold text-gray-700 text-base md:text-lg">
                   <div className="flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-turquoise-600" />
+                    Items
+                  </div>
+                </TableHead>
+                <TableHead className="font-semibold text-gray-700 text-base md:text-lg">
+                  <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-turquoise-600" />
                     Date
                   </div>
@@ -416,6 +422,12 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                   <div className="flex items-center gap-2">
                     <Building className="h-4 w-4 text-turquoise-600" />
                     Merchant
+                  </div>
+                </TableHead>
+                <TableHead className="font-semibold text-gray-700 text-base md:text-lg">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-turquoise-600" />
+                    Notes
                   </div>
                 </TableHead>
             </TableRow>
@@ -518,6 +530,16 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                         <TableCell className={`font-medium ${textColor} text-base md:text-lg`}>
                           {row["Invoice Number"] || '-'}
                         </TableCell>
+                        <TableCell className={`${textColorSecondary} text-base md:text-lg`}>
+                          {hasLineItems ? (
+                            <div className="flex items-center gap-1">
+                              <ShoppingBag className="h-4 w-4 text-turquoise-600" />
+                              <span>{row.lineItems?.length || 0}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className={`${textColorSecondary} text-base md:text-lg whitespace-nowrap`}>
                           {formatDate(row["Date"])}
                         </TableCell>
@@ -526,7 +548,10 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                         </TableCell>
                         <TableCell className={`text-gray-700 font-semibold text-base md:text-lg`}>
                           {row["Merchant"]?.replace("DUPLICATE RECEIPT UPLOADED", "").trim() || row["Merchant"] || 'N/A'}
-                </TableCell>
+                        </TableCell>
+                        <TableCell className={`${textColorSecondary} text-base md:text-lg`}>
+                          {row["Notes"] || '-'}
+                        </TableCell>
                         <TableCell>
                           {/* Show flag badges with text labels */}
                           {(isDuplicate || fraudRisk === 'high' || fraudRisk === 'medium' || hasAlcoholTobacco || hasPersonalExpense) ? (
@@ -587,6 +612,8 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                           key={`line-${index}-${itemIndex}`}
                           className={`${rowColor} border-b border-gray-100`}
                         >
+                          <TableCell></TableCell>
+                          <TableCell></TableCell>
                           <TableCell></TableCell>
                           <TableCell></TableCell>
                           <TableCell className={`text-base md:text-lg ${textColorSecondary} pl-8`}>
