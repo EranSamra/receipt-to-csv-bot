@@ -194,7 +194,14 @@ export default async function handler(req, res) {
             console.log(`[Cache] ✅ Using cached result for ${file.filename}`);
             continue; // Skip Gemini API call
           } else {
-            console.log(`[Cache] ❌ Cache miss for ${file.filename}, calling Gemini API...`);
+            // CRITICAL: Examples should NEVER call the Gemini API
+            // If cache is missing, return an error instead of processing
+            console.error(`[Cache] ❌ CRITICAL: Example receipt "${file.filename}" has no cache. Examples should be pre-cached and never call the API.`);
+            results.push({
+              filename: file.filename,
+              error: 'Example receipt cache not found. Please contact support.'
+            });
+            continue; // Skip Gemini API call - examples should never reach the API
           }
         }
         
