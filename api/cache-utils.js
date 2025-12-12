@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getExampleResult } from './example-results.js';
 
 // Get the directory of the current module (works in both Node.js and Vercel)
 let __dirname;
@@ -90,18 +91,28 @@ export function isExampleReceipt(filename) {
   return isMatch;
 }
 
-// Get cached result - checks persistent cache first, then ephemeral cache
+// Get cached result - checks hardcoded results first, then persistent cache, then ephemeral cache
 export function getCachedResult(filename) {
+  // First, try hardcoded example results (always available, no files needed)
+  const hardcodedResult = getExampleResult(filename);
+  if (hardcodedResult) {
+    console.log(`[Cache] ✅ Hardcoded example result found for ${filename}`);
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:97',message:'Hardcoded example result',data:{filename:filename,hasData:!!hardcodedResult,hasLineItems:!!hardcodedResult.lineItems},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    return hardcodedResult;
+  }
+  
   const cacheKey = getCacheKey(filename);
   
-  // First, try persistent cache (in repo)
+  // Second, try persistent cache (in repo)
   try {
     const persistentCachePath = path.join(PERSISTENT_CACHE_DIR, `${cacheKey}.json`);
     if (fs.existsSync(persistentCachePath)) {
       const cached = JSON.parse(fs.readFileSync(persistentCachePath, 'utf8'));
       console.log(`[Cache] ✅ Persistent cache hit for ${filename}`);
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:85',message:'Persistent cache hit',data:{filename:filename,hasData:!!cached.data,dataType:Array.isArray(cached.data)?'array':typeof cached.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:108',message:'Persistent cache hit',data:{filename:filename,hasData:!!cached.data,dataType:Array.isArray(cached.data)?'array':typeof cached.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       return cached.data;
     }
