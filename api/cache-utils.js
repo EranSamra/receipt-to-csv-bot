@@ -124,60 +124,94 @@ export async function getCachedResult(filename) {
       const normalizedFilename = normalize(filename);
       console.log(`[Cache] Normalized filename: "${normalizedFilename}" (original: "${filename}")`);
       
-      // First, let's try to see what filenames are in the database (for debugging)
+      // First, let's see what filenames are actually in the database
       const { data: allData } = await supabase
         .from('example_receipt_cache')
         .select('filename')
-        .limit(10);
-      console.log(`[Cache] Sample filenames in DB:`, allData?.map(d => d.filename) || 'none');
+        .limit(20);
+      console.log(`[Cache] All filenames in DB (first 20):`, allData?.map(d => d.filename) || 'none');
       
-      // Query database for example results from 'example_receipt_cache' table
-      const { data, error } = await supabase
+      // Try multiple matching strategies
+      // 1. Exact match
+      let { data, error } = await supabase
         .from('example_receipt_cache')
         .select('csv_data, line_items, filename')
         .eq('filename', filename)
         .maybeSingle();
       
-      console.log(`[Cache] Database query result for exact match:`, { 
+      console.log(`[Cache] Query 1 - Exact match "${filename}":`, { 
         hasData: !!data, 
         hasError: !!error, 
-        errorCode: error?.code, 
-        errorMessage: error?.message 
+        errorCode: error?.code,
+        foundFilename: data?.filename
       });
       
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No rows returned - try with normalized filename
-          console.log(`[Cache] No exact match, trying normalized filename...`);
-          const { data: data2, error: error2 } = await supabase
-            .from('example_receipt_cache')
-            .select('csv_data, line_items')
-            .ilike('filename', `%${normalizedFilename}%`)
-            .maybeSingle();
-          
-          console.log(`[Cache] Database query result for normalized match:`, { 
-            hasData: !!data2, 
-            hasError: !!error2, 
-            errorCode: error2?.code 
-          });
-          
-          if (!error2 && data2) {
-            console.log(`[Cache] ✅ Database result found for ${filename} (normalized match)`);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:128',message:'Database example result (normalized)',data:{filename:filename,hasData:!!data2,hasCsv:!!data2.csv_data,hasLineItems:!!data2.line_items},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
-            
-            return {
-              csv: data2.csv_data || '',
-              lineItems: Array.isArray(data2.line_items) ? data2.line_items : (data2.line_items || [])
-            };
-          } else {
-            console.log(`[Cache] No database result found (normalized match also failed)`);
-          }
-        } else {
-          console.warn(`[Cache] Database query error for ${filename}:`, error.message, error.code);
+      // 2. Case-insensitive exact match
+      if (!data && !error) {
+        const { data: data2, error: error2 } = await supabase
+          .from('example_receipt_cache')
+          .select('csv_data, line_items, filename')
+          .ilike('filename', filename)
+          .maybeSingle();
+        
+        console.log(`[Cache] Query 2 - Case-insensitive match "${filename}":`, { 
+          hasData: !!data2, 
+          hasError: !!error2,
+          foundFilename: data2?.filename
+        });
+        
+        if (!error2 && data2) {
+          data = data2;
+          error = null;
         }
-      } else if (data) {
+      }
+      
+      // 3. Normalized filename match (spaces to dashes, lowercase)
+      if (!data && !error) {
+        const { data: data3, error: error3 } = await supabase
+          .from('example_receipt_cache')
+          .select('csv_data, line_items, filename')
+          .ilike('filename', `%${normalizedFilename}%`)
+          .maybeSingle();
+        
+        console.log(`[Cache] Query 3 - Normalized match "%${normalizedFilename}%":`, { 
+          hasData: !!data3, 
+          hasError: !!error3,
+          foundFilename: data3?.filename
+        });
+        
+        if (!error3 && data3) {
+          data = data3;
+          error = null;
+        }
+      }
+      
+      // 4. Try matching just the basename (without path)
+      if (!data && !error) {
+        const basename = filename.includes('/') ? filename.split('/').pop() : filename;
+        const { data: data4, error: error4 } = await supabase
+          .from('example_receipt_cache')
+          .select('csv_data, line_items, filename')
+          .ilike('filename', `%${basename}%`)
+          .maybeSingle();
+        
+        console.log(`[Cache] Query 4 - Basename match "%${basename}%":`, { 
+          hasData: !!data4, 
+          hasError: !!error4,
+          foundFilename: data4?.filename
+        });
+        
+        if (!error4 && data4) {
+          data = data4;
+          error = null;
+        }
+      }
+      
+      if (error && error.code !== 'PGRST116') {
+        console.warn(`[Cache] Database query error for ${filename}:`, error.message, error.code);
+      }
+      
+      if (data) {
         console.log(`[Cache] ✅ Database result found for ${filename}`);
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:140',message:'Database example result',data:{filename:filename,hasData:!!data,hasCsv:!!data.csv_data,hasLineItems:!!data.line_items},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
