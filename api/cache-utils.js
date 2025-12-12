@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getExampleResult } from './example-results.js';
+import { createClient } from '@supabase/supabase-js';
 
 // Get the directory of the current module (works in both Node.js and Vercel)
 let __dirname;
@@ -91,16 +91,76 @@ export function isExampleReceipt(filename) {
   return isMatch;
 }
 
-// Get cached result - checks hardcoded results first, then persistent cache, then ephemeral cache
-export function getCachedResult(filename) {
-  // First, try hardcoded example results (always available, no files needed)
-  const hardcodedResult = getExampleResult(filename);
-  if (hardcodedResult) {
-    console.log(`[Cache] ✅ Hardcoded example result found for ${filename}`);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:97',message:'Hardcoded example result',data:{filename:filename,hasData:!!hardcodedResult,hasLineItems:!!hardcodedResult.lineItems},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    return hardcodedResult;
+// Initialize Supabase client for database queries
+function getSupabaseClient() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
+
+// Get cached result - checks database first, then persistent cache, then ephemeral cache
+export async function getCachedResult(filename) {
+  // First, try database (Supabase) for example results
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      // Normalize filename for database lookup
+      const normalize = (str) => {
+        const basename = str.includes('/') ? str.split('/').pop() : str;
+        return basename.toLowerCase().replace(/\s+/g, '-');
+      };
+      const normalizedFilename = normalize(filename);
+      
+      // Query database for example results from 'example_receipt_cache' table
+      const { data, error } = await supabase
+        .from('example_receipt_cache')
+        .select('csv_data, line_items')
+        .eq('filename', filename)
+        .maybeSingle();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned - try with normalized filename
+          const { data: data2, error: error2 } = await supabase
+            .from('example_receipt_cache')
+            .select('csv_data, line_items')
+            .ilike('filename', `%${normalizedFilename}%`)
+            .maybeSingle();
+          
+          if (!error2 && data2) {
+            console.log(`[Cache] ✅ Database result found for ${filename} (normalized match)`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:128',message:'Database example result (normalized)',data:{filename:filename,hasData:!!data2,hasCsv:!!data2.csv_data,hasLineItems:!!data2.line_items},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            
+            return {
+              csv: data2.csv_data || '',
+              lineItems: Array.isArray(data2.line_items) ? data2.line_items : (data2.line_items || [])
+            };
+          }
+        } else {
+          console.warn(`[Cache] Database query error for ${filename}:`, error.message);
+        }
+      } else if (data) {
+        console.log(`[Cache] ✅ Database result found for ${filename}`);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cache-utils.js:140',message:'Database example result',data:{filename:filename,hasData:!!data,hasCsv:!!data.csv_data,hasLineItems:!!data.line_items},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
+        // Return in the format expected by extract-receipts.js
+        return {
+          csv: data.csv_data || '',
+          lineItems: Array.isArray(data.line_items) ? data.line_items : (data.line_items || [])
+        };
+      }
+    } catch (error) {
+      console.warn(`[Cache] Database query failed for ${filename}:`, error.message);
+    }
   }
   
   const cacheKey = getCacheKey(filename);

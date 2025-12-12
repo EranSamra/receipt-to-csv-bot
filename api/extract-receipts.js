@@ -165,8 +165,8 @@ export default async function handler(req, res) {
         
         if (isExample) {
           console.log(`[Example] Processing example receipt: ${file.filename}`);
-          console.log(`[Cache] Checking cache for example: ${file.filename}`);
-          cachedResult = getCachedResult(file.filename);
+          console.log(`[Cache] Checking database for example: ${file.filename}`);
+          cachedResult = await getCachedResult(file.filename);
           // #region agent log
           fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:161',message:'Cache check result',data:{filename:file.filename,hasCache:!!cachedResult,cacheType:Array.isArray(cachedResult)?'array':typeof cachedResult},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
           // #endregion
