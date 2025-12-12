@@ -93,21 +93,28 @@ export function isExampleReceipt(filename) {
 
 // Initialize Supabase client for database queries
 function getSupabaseClient() {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  // In Vercel serverless functions, use non-VITE_ prefixed vars
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  // Prefer service role key for admin access, fallback to anon key
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   
   if (!supabaseUrl || !supabaseKey) {
+    console.log(`[Cache] Supabase not initialized - URL: ${!!supabaseUrl}, Key: ${!!supabaseKey}`);
     return null;
   }
   
+  console.log(`[Cache] Supabase client initialized with URL: ${supabaseUrl.substring(0, 20)}...`);
   return createClient(supabaseUrl, supabaseKey);
 }
 
 // Get cached result - checks database first, then persistent cache, then ephemeral cache
 export async function getCachedResult(filename) {
+  console.log(`[Cache] Looking up cache for: ${filename}`);
+  
   // First, try database (Supabase) for example results
   const supabase = getSupabaseClient();
   if (supabase) {
+    console.log(`[Cache] Supabase client initialized, querying database...`);
     try {
       // Normalize filename for database lookup
       const normalize = (str) => {
@@ -115,22 +122,44 @@ export async function getCachedResult(filename) {
         return basename.toLowerCase().replace(/\s+/g, '-');
       };
       const normalizedFilename = normalize(filename);
+      console.log(`[Cache] Normalized filename: "${normalizedFilename}" (original: "${filename}")`);
+      
+      // First, let's try to see what filenames are in the database (for debugging)
+      const { data: allData } = await supabase
+        .from('example_receipt_cache')
+        .select('filename')
+        .limit(10);
+      console.log(`[Cache] Sample filenames in DB:`, allData?.map(d => d.filename) || 'none');
       
       // Query database for example results from 'example_receipt_cache' table
       const { data, error } = await supabase
         .from('example_receipt_cache')
-        .select('csv_data, line_items')
+        .select('csv_data, line_items, filename')
         .eq('filename', filename)
         .maybeSingle();
+      
+      console.log(`[Cache] Database query result for exact match:`, { 
+        hasData: !!data, 
+        hasError: !!error, 
+        errorCode: error?.code, 
+        errorMessage: error?.message 
+      });
       
       if (error) {
         if (error.code === 'PGRST116') {
           // No rows returned - try with normalized filename
+          console.log(`[Cache] No exact match, trying normalized filename...`);
           const { data: data2, error: error2 } = await supabase
             .from('example_receipt_cache')
             .select('csv_data, line_items')
             .ilike('filename', `%${normalizedFilename}%`)
             .maybeSingle();
+          
+          console.log(`[Cache] Database query result for normalized match:`, { 
+            hasData: !!data2, 
+            hasError: !!error2, 
+            errorCode: error2?.code 
+          });
           
           if (!error2 && data2) {
             console.log(`[Cache] ✅ Database result found for ${filename} (normalized match)`);
@@ -142,9 +171,11 @@ export async function getCachedResult(filename) {
               csv: data2.csv_data || '',
               lineItems: Array.isArray(data2.line_items) ? data2.line_items : (data2.line_items || [])
             };
+          } else {
+            console.log(`[Cache] No database result found (normalized match also failed)`);
           }
         } else {
-          console.warn(`[Cache] Database query error for ${filename}:`, error.message);
+          console.warn(`[Cache] Database query error for ${filename}:`, error.message, error.code);
         }
       } else if (data) {
         console.log(`[Cache] ✅ Database result found for ${filename}`);
@@ -157,11 +188,17 @@ export async function getCachedResult(filename) {
           csv: data.csv_data || '',
           lineItems: Array.isArray(data.line_items) ? data.line_items : (data.line_items || [])
         };
+      } else {
+        console.log(`[Cache] No database result found (no data, no error)`);
       }
     } catch (error) {
       console.warn(`[Cache] Database query failed for ${filename}:`, error.message);
     }
+  } else {
+    console.log(`[Cache] Supabase client not initialized (missing env vars)`);
   }
+  
+  console.log(`[Cache] Falling back to file cache for ${filename}...`);
   
   const cacheKey = getCacheKey(filename);
   
