@@ -241,7 +241,20 @@ export default async function handler(req, res) {
         // #endregion
         
         // Call Gemini API (only for non-examples)
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          console.error(`❌ GEMINI_API_KEY is missing for file: ${file.filename}`);
+          results.push({
+            filename: file.filename,
+            error: 'API key not configured. Please set GEMINI_API_KEY in environment variables.'
+          });
+          continue;
+        }
+        
+        // Log API key info for debugging (first 10 chars only for security)
+        console.log(`[Gemini API] Calling API for ${file.filename}, Key prefix: ${apiKey.substring(0, 10)}..., Length: ${apiKey.length}`);
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -334,10 +347,31 @@ ROBUSTNESS:
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('Gemini API error:', response.status, errorText);
+          console.error(`❌ Gemini API error for ${file.filename}:`, response.status, response.statusText);
+          console.error(`Error details:`, errorText.substring(0, 500));
+          
+          // Parse error to provide better user message
+          let errorMessage = 'Gemini API error';
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error?.message) {
+              errorMessage = `Gemini API error: ${response.status} ${errorJson.error.message}`;
+              console.error(`Parsed error:`, errorJson.error);
+            }
+          } catch (e) {
+            // If JSON parse fails, use raw error text
+            errorMessage = `Gemini API error: ${response.status} ${errorText.substring(0, 200)}`;
+          }
+          
           // #region agent log
           fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:298',message:'Gemini API error response',data:{filename:file.filename,status:response.status,statusText:response.statusText,errorText:errorText.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
           // #endregion
+          
+          results.push({
+            filename: file.filename,
+            error: errorMessage
+          });
+          continue;
           results.push({
             filename: file.filename,
             error: 'Failed to process with AI'
