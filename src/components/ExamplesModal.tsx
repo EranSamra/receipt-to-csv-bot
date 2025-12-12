@@ -62,13 +62,6 @@ const exampleReceipts: ExampleReceipt[] = [
     thumbnail: "/sample-receipts/grocery-receipt.jpeg"
   },
   {
-    id: "amazon-receipt",
-    name: "Amazon Receipt",
-    description: "Online marketplace order receipt",
-    filename: "Amazon.png",
-    thumbnail: "/sample-receipts/Amazon.png"
-  },
-  {
     id: "office-supplies",
     name: "Google Ads",
     description: "Digital advertising campaign receipt",

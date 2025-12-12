@@ -57,7 +57,6 @@ export function isExampleReceipt(filename) {
     'software.png',
     'hotel-receipt copy.png',
     'grocery-receipt.jpeg',
-    'amazon.png',
     'google ads.png',
     'transport-receipt.png'
   ];

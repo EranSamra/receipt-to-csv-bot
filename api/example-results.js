@@ -49,12 +49,6 @@ export const EXAMPLE_RESULTS = {
       { invoiceNumber: 'GROC-20240119', description: 'Other', date: '2024-01-19', amount: '30.18', category: 'food' }
     ]
   },
-  'amazon.png': {
-    csv: 'AMZ-1234567890,2024-01-17,89.99,USD,Amazon,Invoice,Low,No,No,No,',
-    lineItems: [
-      { invoiceNumber: 'AMZ-1234567890', description: 'Product A', date: '2024-01-17', amount: '89.99', category: 'other' }
-    ]
-  },
   'google ads.png': {
     csv: 'GA-20240116,2024-01-16,500.00,USD,Google Ads,Invoice,Low,No,No,No,',
     lineItems: [
