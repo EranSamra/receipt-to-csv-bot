@@ -157,12 +157,14 @@ export default async function handler(req, res) {
         
         // Check if this is an example receipt and if we have cached results
         const isExample = isExampleReceipt(file.filename);
+        console.log(`[Example Check] File: "${file.filename}" → isExample: ${isExample}`);
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:156',message:'Example detection result',data:{filename:file.filename,isExample:isExample},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
         let cachedResult = null;
         
         if (isExample) {
+          console.log(`[Example] Processing example receipt: ${file.filename}`);
           console.log(`[Cache] Checking cache for example: ${file.filename}`);
           cachedResult = getCachedResult(file.filename);
           // #region agent log
@@ -215,6 +217,22 @@ export default async function handler(req, res) {
           continue;
         }
         
+        // SAFETY CHECK: Double-check this is NOT an example before calling API
+        // This prevents examples from calling Gemini even if detection failed earlier
+        const doubleCheckIsExample = isExampleReceipt(file.filename);
+        if (doubleCheckIsExample) {
+          console.error(`[Cache] ❌ SAFETY CHECK FAILED: Example "${file.filename}" was about to call Gemini API!`);
+          console.error(`[Cache] This should never happen - example detection should have caught this earlier.`);
+          console.error(`[Cache] Blocking API call to prevent example from using Gemini.`);
+          results.push({
+            filename: file.filename,
+            error: 'Example receipt detected. Examples should use cached results only.'
+          });
+          continue; // Block the API call
+        }
+        
+        console.log(`[Non-Example] Processing regular receipt: ${file.filename} (will call Gemini API)`);
+        
         // Convert to base64
         const base64 = encodeBase64(file.data);
         console.log(`Successfully encoded ${file.filename}`);
@@ -222,7 +240,7 @@ export default async function handler(req, res) {
         fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:203',message:'Before Gemini API call',data:{filename:file.filename,base64Length:base64.length,hasApiKey:!!process.env.GEMINI_API_KEY,apiKeyPrefix:process.env.GEMINI_API_KEY?.substring(0,10)||'missing'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
         
-        // Call Gemini API
+        // Call Gemini API (only for non-examples)
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
