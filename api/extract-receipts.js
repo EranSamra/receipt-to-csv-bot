@@ -151,14 +151,23 @@ export default async function handler(req, res) {
     for (const file of files) {
       try {
         console.log(`Processing file: ${file.filename}, size: ${file.data.length} bytes`);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:152',message:'File processing start',data:{filename:file.filename,size:file.data.length,mimetype:file.mimetype},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         
         // Check if this is an example receipt and if we have cached results
         const isExample = isExampleReceipt(file.filename);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:156',message:'Example detection result',data:{filename:file.filename,isExample:isExample},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         let cachedResult = null;
         
         if (isExample) {
           console.log(`[Cache] Checking cache for example: ${file.filename}`);
           cachedResult = getCachedResult(file.filename);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:161',message:'Cache check result',data:{filename:file.filename,hasCache:!!cachedResult,cacheType:Array.isArray(cachedResult)?'array':typeof cachedResult},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           
           if (cachedResult) {
             // Simulate processing delay to maintain realistic UX
@@ -202,6 +211,9 @@ export default async function handler(req, res) {
         // Convert to base64
         const base64 = encodeBase64(file.data);
         console.log(`Successfully encoded ${file.filename}`);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:203',message:'Before Gemini API call',data:{filename:file.filename,base64Length:base64.length,hasApiKey:!!process.env.GEMINI_API_KEY,apiKeyPrefix:process.env.GEMINI_API_KEY?.substring(0,10)||'missing'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         
         // Call Gemini API
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
@@ -298,6 +310,9 @@ ROBUSTNESS:
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Gemini API error:', response.status, errorText);
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:298',message:'Gemini API error response',data:{filename:file.filename,status:response.status,statusText:response.statusText,errorText:errorText.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
           results.push({
             filename: file.filename,
             error: 'Failed to process with AI'
@@ -307,6 +322,9 @@ ROBUSTNESS:
 
         const data = await response.json();
         const fullContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:308',message:'Gemini API success response',data:{filename:file.filename,contentLength:fullContent.length,hasCandidates:!!data.candidates,hasContent:!!fullContent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         
         // Log raw response for debugging
         console.log(`📄 Raw Gemini response for ${file.filename} (${fullContent.length} chars):`);
@@ -331,6 +349,9 @@ ROBUSTNESS:
           // Try to parse as JSON array
           const parsed = JSON.parse(cleanContent);
           jsonReceipts = Array.isArray(parsed) ? parsed : [parsed];
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:332',message:'JSON parse success',data:{filename:file.filename,receiptCount:jsonReceipts.length,isArray:Array.isArray(parsed)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
           
           console.log(`✅ Parsed ${jsonReceipts.length} receipt(s) from JSON for ${file.filename}`);
           
@@ -346,6 +367,9 @@ ROBUSTNESS:
         } catch (parseError) {
           console.error(`❌ Failed to parse JSON response for ${file.filename}:`, parseError.message);
           console.error(`   Response content (first 1000 chars):`, fullContent.substring(0, 1000));
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:346',message:'JSON parse error',data:{filename:file.filename,error:parseError.message,contentPreview:fullContent.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
           
           // Fallback: try to extract JSON from text
           const jsonMatch = fullContent.match(/\[[\s\S]*\]/);
@@ -459,12 +483,21 @@ ROBUSTNESS:
                     lineItems: r.lineItems || []
                   }));
               saveCachedResult(file.filename, cacheData);
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:485',message:'Cache save attempt',data:{filename:file.filename,isExample:isExample,resultCount:fileResults.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+              // #endregion
             }
           }
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:468',message:'File processing success',data:{filename:file.filename,receiptCount:jsonReceipts.length,lineItemCount:lineItems.length,resultAdded:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
         }
         
       } catch (error) {
         console.error(`Error processing file ${file.filename}:`, error);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5f70a413-60bf-4dbe-858f-62736ac1b161',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'extract-receipts.js:490',message:'File processing error',data:{filename:file.filename,errorType:error?.constructor?.name,errorMessage:error?.message||String(error),stack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
         
         // Safe error message extraction
         let errorMsg = 'Unknown error occurred';
