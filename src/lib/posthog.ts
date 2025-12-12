@@ -27,7 +27,12 @@ export const initPostHog = () => {
     }
     
     try {
-      posthog.init('phc_kSsmb6ik2SkurBjueH4AFYPK4D50w9yTPIwKdb0Xtc3', {
+      const posthogKey = import.meta.env.VITE_POSTHOG_KEY;
+      if (!posthogKey) {
+        console.warn('[PostHog] VITE_POSTHOG_KEY not set. PostHog analytics will be disabled.');
+        return; // Exit early if no key
+      }
+      posthog.init(posthogKey, {
         api_host: 'https://us.i.posthog.com',
         person_profiles: 'identified_only', // Only create profiles for identified users
         autocapture: false, // Disabled to stop noisy "Click" events - we track meaningful actions explicitly

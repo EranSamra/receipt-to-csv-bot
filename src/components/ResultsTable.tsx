@@ -1,4 +1,4 @@
-import { Download, FileText, Calendar, DollarSign, Building, Tag, AlertTriangle, Copy, Wine, ShoppingBag, Shield, AlertCircle, ChevronDown, ChevronRight, Filter, X } from "lucide-react";
+import { Download, FileText, Calendar, DollarSign, Building, Tag, AlertTriangle, Copy, Wine, ShoppingBag, Shield, ChevronDown, ChevronRight, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -288,7 +288,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
           const invoiceNumber = row["Invoice Number"] || '';
           const receiptImageUrl = row.receiptImage || 
             (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${originalIndex}`));
-          const notes = row["Notes"] || '';
           
           return (
             <div 
@@ -370,12 +369,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                 </div>
               </div>
               
-              {/* Notes */}
-              {notes && (
-                <div className="mt-3 text-xs text-gray-600 border-t border-gray-200 pt-2">
-                  {notes}
-                </div>
-              )}
             </div>
           );
         })}
@@ -425,12 +418,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                     Merchant
                   </div>
                 </TableHead>
-                <TableHead className="font-semibold text-gray-700 text-base md:text-lg">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-turquoise-600" />
-                    Notes
-                  </div>
-                </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -450,9 +437,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                   const invoiceNumber = row["Invoice Number"] || '';
                   const receiptImageUrl = row.receiptImage || 
                     (invoiceNumber ? receiptImages?.get(invoiceNumber) : receiptImages?.get(`receipt-${originalIndex}`));
-                  
-                  // Get notes from backend
-                  const notes = row["Notes"] || '';
                   
                   // Color scheme: flagged items get red left border, but regular text colors
                   const rowColor = '';
@@ -545,7 +529,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                 </TableCell>
                         <TableCell>
                           {/* Show flag badges with text labels */}
-                          {(isDuplicate || fraudRisk === 'high' || fraudRisk === 'medium' || hasAlcoholTobacco || hasPersonalExpense || notes) ? (
+                          {(isDuplicate || fraudRisk === 'high' || fraudRisk === 'medium' || hasAlcoholTobacco || hasPersonalExpense) ? (
                             <div className="flex flex-wrap items-center gap-2">
                               {/* Flag badges - all red with text labels */}
                               {isDuplicate && (
@@ -590,12 +574,6 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                                   <span className="text-xs font-semibold text-red-700">Personal</span>
                                 </div>
                               )}
-                              {/* Notes text */}
-                              {notes && (
-                                <span className="text-xs text-gray-600 truncate max-w-[150px] sm:max-w-xs" title={notes}>
-                                  {notes}
-                                </span>
-                              )}
                             </div>
                           ) : (
                             <span className="text-gray-400 text-base md:text-lg">-</span>
@@ -626,6 +604,7 @@ export const ResultsTable = ({ data, receiptImages }: ResultsTableProps) => {
                           <TableCell className={`text-base md:text-lg ${textColorSecondary}`}>
                             {lineItem.category || '-'}
                           </TableCell>
+                          <TableCell></TableCell>
                           <TableCell></TableCell>
               </TableRow>
             ))}

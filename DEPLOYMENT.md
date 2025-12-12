@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. **Vercel Account**: Sign up at [vercel.com](https://vercel.com)
-2. **Gemini API Key**: Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. **Gemini API Key**: Get your API key from [Google AI Studio](                                      https://makersuite.google.com/app/apikey)
 
 ## Deployment Steps
 
@@ -31,12 +31,21 @@ npm run deploy
 
 ### 3. Configure Environment Variables
 
-In your Vercel dashboard:
+**📋 See [VERCEL_ENV_VARIABLES.md](./VERCEL_ENV_VARIABLES.md) for a complete list of all environment variables.**
+
+**Minimum Required Variables:**
+- `GEMINI_API_KEY` - Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+- `RESEND_API_KEY` - Get from [Resend.com](https://resend.com/api-keys) (for email features)
+- `EMAIL_FROM` - Email sender address (e.g., `Mesh AI <onboarding@resend.dev>`)
+- `VITE_SUPABASE_URL` - Your Supabase project URL (if using Supabase auth)
+- `VITE_SUPABASE_PUBLISHABLE_KEY` - Your Supabase anon key (if using Supabase auth)
+
+**To add variables in Vercel:**
 1. Go to your project settings
 2. Navigate to "Environment Variables"
-3. Add the following variable:
-   - **Name**: `GEMINI_API_KEY`
-   - **Value**: Your Gemini API key (e.g., `AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY`)
+3. Add each variable listed above
+4. Select environments (Production, Preview, Development)
+5. Click Save
 
 ### 4. Redeploy
 

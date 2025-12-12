@@ -23,7 +23,11 @@ const upload = multer({
 });
 
 // Gemini API configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAQrLDliNV3hdbYWYBxaESnv-HRinRFDUY';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('❌ GEMINI_API_KEY not found in environment variables');
+  throw new Error('GEMINI_API_KEY is required. Please set it in your environment variables.');
+}
 
 // Simple base64 encoding function
 function encodeBase64(buffer) {
