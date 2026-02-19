@@ -196,14 +196,8 @@ export default async function handler(req, res) {
             console.log(`[Cache] ✅ Using cached result for ${file.filename}`);
             continue; // Skip Gemini API call
           } else {
-            // This should never happen - examples have hardcoded results
-            // But if it does, return an error instead of calling the API
-            console.error(`[Cache] ❌ CRITICAL: Example receipt "${file.filename}" has no cache or hardcoded result. This should not happen.`);
-            results.push({
-              filename: file.filename,
-              error: 'Example receipt data not found. Please contact support.'
-            });
-            continue; // Skip Gemini API call - examples should never reach the API
+            // No cached result found - fall through to Gemini API
+            console.warn(`[Cache] ⚠️ Example receipt "${file.filename}" has no cache. Falling through to Gemini API.`);
           }
         }
         
@@ -217,21 +211,7 @@ export default async function handler(req, res) {
           continue;
         }
         
-        // SAFETY CHECK: Double-check this is NOT an example before calling API
-        // This prevents examples from calling Gemini even if detection failed earlier
-        const doubleCheckIsExample = isExampleReceipt(file.filename);
-        if (doubleCheckIsExample) {
-          console.error(`[Cache] ❌ SAFETY CHECK FAILED: Example "${file.filename}" was about to call Gemini API!`);
-          console.error(`[Cache] This should never happen - example detection should have caught this earlier.`);
-          console.error(`[Cache] Blocking API call to prevent example from using Gemini.`);
-          results.push({
-            filename: file.filename,
-            error: 'Example receipt detected. Examples should use cached results only.'
-          });
-          continue; // Block the API call
-        }
-        
-        console.log(`[Non-Example] Processing regular receipt: ${file.filename} (will call Gemini API)`);
+        console.log(`[Processing] Calling Gemini API for: ${file.filename}${isExample ? ' (example, cache miss)' : ''}`);
         
         // Convert to base64
         const base64 = encodeBase64(file.data);
@@ -370,11 +350,6 @@ ROBUSTNESS:
           results.push({
             filename: file.filename,
             error: errorMessage
-          });
-          continue;
-          results.push({
-            filename: file.filename,
-            error: 'Failed to process with AI'
           });
           continue;
         }
@@ -838,7 +813,16 @@ function parsePart(buffer) {
   }
   
   const headers = buffer.slice(0, headerEnd).toString();
-  const data = buffer.slice(headerEnd + headerEndOffset);
+  let data = buffer.slice(headerEnd + headerEndOffset);
+
+  // Strip trailing \r\n or \n that precedes the next boundary marker.
+  // Without this, binary file data may include spurious trailing bytes
+  // which can corrupt base64 encoding for small files.
+  if (data.length >= 2 && data[data.length - 2] === 0x0d && data[data.length - 1] === 0x0a) {
+    data = data.slice(0, data.length - 2);
+  } else if (data.length >= 1 && data[data.length - 1] === 0x0a) {
+    data = data.slice(0, data.length - 1);
+  }
   
   // More flexible filename matching (handle mobile browser differences)
   const filenameMatch = headers.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
